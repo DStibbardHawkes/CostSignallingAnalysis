@@ -1,0 +1,629 @@
+---
+title: "Cost for Signalling: Exploring The Full Model"
+output: html_notebook
+---
+
+### Packages and Data ###
+
+In this document we're going to explore the full model and look at condition-specific contrasts. Of course, we'll start by loading our packages. 
+
+These analyses were last conducted on the following date:
+
+```{r}
+date()
+```
+
+If any of the packages or functions used in this analysis are now broken or depreciated, consider using the groundhog package with this date to load packages.
+
+```{r}
+##load packages (all on CRAN; use install.packages() if first time)
+library(tidyverse) #Load dplyr, ggplot and others
+library(brms) #Bayesian regressions with STAN
+library(tidybayes) #Useful functions for describing posterior (e.g., mean_hdi)
+library(ggplot2) #Good-looking visualization package
+library(bayesplot) #Quick and easy coef plots.
+library(ggridges) #Fancy density ridgeplots for fancy people.
+library(magrittr) #For two-way pipes
+library(rstudioapi) #Allows RStudio to get the current working directory.
+library(patchwork) #Easily stitch figures together with operators.
+library(xtable) # Brings many types table format to the table. Used here to export LaTeX tables.  
+library(ggtext) #Use HTML Elements in GGPlot
+``` 
+
+Next let's load the data. As before, this uses the rstudio API and requires that the appropriate .rda file be in the same folder as this script.
+
+```{r}
+setwd(dirname(getActiveDocumentContext()$path))
+load("carnivaldata.rda")
+load("carnivalmodels.rda")
+
+```
+
+In case there are any sources of (psuedo-)random variation in our functions, let's set a RNG seed.
+
+```{r}
+set.seed(42)
+```
+
+Now we can start exploring the full model.
+
+## Exploring the Full Model ##
+
+First, we'll wrangle our data and convert to the probability scale in order to reproduce our fitted outputs. It's a complex model and the corresponding code is also complex.
+
+```{r}
+ps_CrGtrSrA <- posterior_samples(CrGtrSrA) %>%
+  rename_with(
+    ~ gsub("["  , "", .x, fixed = TRUE)
+  ) %>%
+    rename_with(
+    ~ gsub("]"  , "", .x, fixed = TRUE)
+  ) %>%
+    rename_with(
+    ~ gsub(","  , "", .x, fixed = TRUE)
+  ) %>%
+    rename_with(
+    ~ gsub("/"  , "", .x, fixed = TRUE)
+  ) %>% 
+mutate(
+  Pay1_Prize1_Younger_Forage_Female = b_ConditionPay_Bracelet + r_AgeSplitYoungerConditionPay_Bracelet +
+                                      r_Game_TypeFORAGEConditionPay_Bracelet + r_sexFConditionPay_Bracelet
+  ,Pay1_Prize0_Younger_Forage_Female = b_ConditionPay_NoBracelet + r_AgeSplitYoungerConditionPay_NoBracelet +
+                                      r_Game_TypeFORAGEConditionPay_NoBracelet + r_sexFConditionPay_NoBracelet
+  ,Pay0_Prize1_Younger_Forage_Female = b_ConditionNoPay_Bracelet + r_AgeSplitYoungerConditionNoPay_Bracelet +
+                                      r_Game_TypeFORAGEConditionNoPay_Bracelet + r_sexFConditionNoPay_Bracelet  
+  ,Pay0_Prize0_Younger_Forage_Female = b_ConditionNoPay_NoBracelet + r_AgeSplitYoungerConditionNoPay_NoBracelet +
+                                      r_Game_TypeFORAGEConditionNoPay_NoBracelet + r_sexFConditionNoPay_NoBracelet  
+  
+  ,Pay1_Prize1_Younger_Hunt_Female = b_ConditionPay_Bracelet + r_AgeSplitYoungerConditionPay_Bracelet +
+                                      r_Game_TypeHUNTConditionPay_Bracelet + r_sexFConditionPay_Bracelet
+  ,Pay1_Prize0_Younger_Hunt_Female = b_ConditionPay_NoBracelet + r_AgeSplitYoungerConditionPay_NoBracelet +
+                                      r_Game_TypeHUNTConditionPay_NoBracelet + r_sexFConditionPay_NoBracelet
+  ,Pay0_Prize1_Younger_Hunt_Female = b_ConditionNoPay_Bracelet + r_AgeSplitYoungerConditionNoPay_Bracelet +
+                                      r_Game_TypeHUNTConditionNoPay_Bracelet + r_sexFConditionNoPay_Bracelet  
+  ,Pay0_Prize0_Younger_Hunt_Female = b_ConditionNoPay_NoBracelet + r_AgeSplitYoungerConditionNoPay_NoBracelet +
+                                      r_Game_TypeHUNTConditionNoPay_NoBracelet + r_sexFConditionNoPay_NoBracelet  
+  
+  ,Pay1_Prize1_Younger_Forage_Male = b_ConditionPay_Bracelet + r_AgeSplitYoungerConditionPay_Bracelet +
+                                      r_Game_TypeFORAGEConditionPay_Bracelet + r_sexMConditionPay_Bracelet
+  ,Pay1_Prize0_Younger_Forage_Male = b_ConditionPay_NoBracelet + r_AgeSplitYoungerConditionPay_NoBracelet +
+                                      r_Game_TypeFORAGEConditionPay_NoBracelet + r_sexMConditionPay_NoBracelet
+  ,Pay0_Prize1_Younger_Forage_Male = b_ConditionNoPay_Bracelet + r_AgeSplitYoungerConditionNoPay_Bracelet +
+                                      r_Game_TypeFORAGEConditionNoPay_Bracelet + r_sexMConditionNoPay_Bracelet  
+  ,Pay0_Prize0_Younger_Forage_Male = b_ConditionNoPay_NoBracelet + r_AgeSplitYoungerConditionNoPay_NoBracelet +
+                                      r_Game_TypeFORAGEConditionNoPay_NoBracelet + r_sexMConditionNoPay_NoBracelet  
+  
+  ,Pay1_Prize1_Younger_Hunt_Male = b_ConditionPay_Bracelet + r_AgeSplitYoungerConditionPay_Bracelet +
+                                      r_Game_TypeHUNTConditionPay_Bracelet + r_sexMConditionPay_Bracelet
+  ,Pay1_Prize0_Younger_Hunt_Male = b_ConditionPay_NoBracelet + r_AgeSplitYoungerConditionPay_NoBracelet +
+                                      r_Game_TypeHUNTConditionPay_NoBracelet + r_sexMConditionPay_NoBracelet
+  ,Pay0_Prize1_Younger_Hunt_Male = b_ConditionNoPay_Bracelet + r_AgeSplitYoungerConditionNoPay_Bracelet +
+                                      r_Game_TypeHUNTConditionNoPay_Bracelet + r_sexMConditionNoPay_Bracelet  
+  ,Pay0_Prize0_Younger_Hunt_Male = b_ConditionNoPay_NoBracelet + r_AgeSplitYoungerConditionNoPay_NoBracelet +
+                                      r_Game_TypeHUNTConditionNoPay_NoBracelet + r_sexMConditionNoPay_NoBracelet  
+
+  ,Pay1_Prize1_Older_Forage_Female = b_ConditionPay_Bracelet + r_AgeSplitOlderConditionPay_Bracelet +
+                                      r_Game_TypeFORAGEConditionPay_Bracelet + r_sexFConditionPay_Bracelet
+  ,Pay1_Prize0_Older_Forage_Female = b_ConditionPay_NoBracelet + r_AgeSplitOlderConditionPay_NoBracelet +
+                                      r_Game_TypeFORAGEConditionPay_NoBracelet + r_sexFConditionPay_NoBracelet
+  ,Pay0_Prize1_Older_Forage_Female = b_ConditionNoPay_Bracelet + r_AgeSplitOlderConditionNoPay_Bracelet +
+                                      r_Game_TypeFORAGEConditionNoPay_Bracelet + r_sexFConditionNoPay_Bracelet  
+  ,Pay0_Prize0_Older_Forage_Female = b_ConditionNoPay_NoBracelet + r_AgeSplitOlderConditionNoPay_NoBracelet +
+                                      r_Game_TypeFORAGEConditionNoPay_NoBracelet + r_sexFConditionNoPay_NoBracelet  
+  
+  ,Pay1_Prize1_Older_Hunt_Female = b_ConditionPay_Bracelet + r_AgeSplitOlderConditionPay_Bracelet +
+                                      r_Game_TypeHUNTConditionPay_Bracelet + r_sexFConditionPay_Bracelet
+  ,Pay1_Prize0_Older_Hunt_Female = b_ConditionPay_NoBracelet + r_AgeSplitOlderConditionPay_NoBracelet +
+                                      r_Game_TypeHUNTConditionPay_NoBracelet + r_sexFConditionPay_NoBracelet
+  ,Pay0_Prize1_Older_Hunt_Female = b_ConditionNoPay_Bracelet + r_AgeSplitOlderConditionNoPay_Bracelet +
+                                      r_Game_TypeHUNTConditionNoPay_Bracelet + r_sexFConditionNoPay_Bracelet  
+  ,Pay0_Prize0_Older_Hunt_Female = b_ConditionNoPay_NoBracelet + r_AgeSplitOlderConditionNoPay_NoBracelet +
+                                      r_Game_TypeHUNTConditionNoPay_NoBracelet + r_sexFConditionNoPay_NoBracelet  
+  
+  ,Pay1_Prize1_Older_Forage_Male = b_ConditionPay_Bracelet + r_AgeSplitOlderConditionPay_Bracelet +
+                                      r_Game_TypeFORAGEConditionPay_Bracelet + r_sexMConditionPay_Bracelet
+  ,Pay1_Prize0_Older_Forage_Male = b_ConditionPay_NoBracelet + r_AgeSplitOlderConditionPay_NoBracelet +
+                                      r_Game_TypeFORAGEConditionPay_NoBracelet + r_sexMConditionPay_NoBracelet
+  ,Pay0_Prize1_Older_Forage_Male = b_ConditionNoPay_Bracelet + r_AgeSplitOlderConditionNoPay_Bracelet +
+                                      r_Game_TypeFORAGEConditionNoPay_Bracelet + r_sexMConditionNoPay_Bracelet  
+  ,Pay0_Prize0_Older_Forage_Male = b_ConditionNoPay_NoBracelet + r_AgeSplitOlderConditionNoPay_NoBracelet +
+                                      r_Game_TypeFORAGEConditionNoPay_NoBracelet + r_sexMConditionNoPay_NoBracelet  
+  
+  ,Pay1_Prize1_Older_Hunt_Male = b_ConditionPay_Bracelet + r_AgeSplitOlderConditionPay_Bracelet +
+                                      r_Game_TypeHUNTConditionPay_Bracelet + r_sexMConditionPay_Bracelet
+  ,Pay1_Prize0_Older_Hunt_Male = b_ConditionPay_NoBracelet + r_AgeSplitOlderConditionPay_NoBracelet +
+                                      r_Game_TypeHUNTConditionPay_NoBracelet + r_sexMConditionPay_NoBracelet
+  ,Pay0_Prize1_Older_Hunt_Male = b_ConditionNoPay_Bracelet + r_AgeSplitOlderConditionNoPay_Bracelet +
+                                      r_Game_TypeHUNTConditionNoPay_Bracelet + r_sexMConditionNoPay_Bracelet  
+  ,Pay0_Prize0_Older_Hunt_Male = b_ConditionNoPay_NoBracelet + r_AgeSplitOlderConditionNoPay_NoBracelet +
+                                      r_Game_TypeHUNTConditionNoPay_NoBracelet + r_sexMConditionNoPay_NoBracelet      
+                       ) %>%
+  select(starts_with("Pay")) %>% 
+  inv_logit_scaled() 
+```
+
+Now we've wrangled the outputs, lets visualise.
+
+```{r}
+FigFull <- ps_CrGtrSrA %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "Condition",
+    values_to = "Estimate"
+  )  %>%
+  separate(Condition, c("Pay", "Prize", "Age", "Game", "Gender"), sep = "_") %>%
+  unite(c("Pay","Prize"), col = "Condition", sep = ";") %>%
+  mutate(Game = recode(Game, "Forage" = "Search", "Hunt" = "Aim")) %>%
+  group_by(Condition, Age, Game, Gender) %>% 
+  mean_hdci(Estimate,.width = .9) %>% 
+  mutate(Gender = factor(Gender, levels = c("Male", "Female"))
+         ,Game = factor(Game, levels = c("Aim", "Search"))
+         ,Condition = factor(Condition, levels = c("Pay0;Prize1", "Pay0;Prize0",  "Pay1;Prize1", "Pay1;Prize0"))
+         ,Age = factor(Age, levels = c("Younger", "Older"))) %>%
+  ggplot(aes(x = Estimate, y = Condition, color = Age)) + scale_color_manual(values=c("#56B4E9", "#E69F00")) + geom_point(position = position_dodge(.5)) +  
+  geom_errorbar(aes(xmin = .lower, xmax = .upper), width=0, lwd = 1,  position = position_dodge(.5))  + 
+  facet_grid(Gender~Game, labeller = label_parsed) + xlab("Probability of playing a given round") 
+
+FigFull
+```
+
+We'll save this figure for the paper.
+
+```{r}
+ggsave(
+  plot = FigFull,
+  file = "FigFull.pdf",
+  path = "TablesAndFigures",
+  width = 20,
+  height = 10,
+  units = "cm")
+
+```
+
+Now, let's create a table of estimates on the probability scale.
+
+```{r, echo = F}
+TabCrGtrSrA <- ps_CrGtrSrA %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "Condition",
+    values_to = "Estimate"
+  )  %>%
+  separate(Condition, c("Pay", "Prize", "Age", "Game", "Gender"), sep = "_") %>%
+  unite(c("Pay","Prize"), col = "Condition", sep = ";") %>%
+  mutate(Game = recode(Game, "Forage" = "Search", "Hunt" = "Aim")) %>%
+  group_by(Condition, Age, Game, Gender) %>% 
+  mean_hdci(Estimate,.width = .9) %>% 
+  mutate_if(is_double, round, 2) %>%
+  select(-.width, -.point, -.interval) %>%
+  unite("90%CI", c(".lower", ".upper"), sep = "-" ) %>%
+  pivot_wider(names_from= "Gender", values_from = c("Estimate", "90%CI")) %>% 
+  relocate(ends_with("Female"), .after = 7) %>%
+  arrange(desc(Condition), desc(Game), desc(Age), desc(Condition)) %>%
+  rename(
+    "p Male" = "Estimate_Male",
+    "90%CI Male" = "90%CI_Male",
+    "p Female" = "Estimate_Female",
+    "90%CI Female" = "90%CI_Female"
+  )
+
+TabCrGtrSrA
+```
+
+And also save this for the paper.
+
+```{r}
+FullTableLaTeX <- TabCrGtrSrA %>% 
+  xtable(label = "Tab:FullModel",
+         caption = "Mean posterior probabilities with 90 percent confidence intervals of playing any round by game type, pay/prize condition, age and gender." 
+         )
+
+print(
+  FullTableLaTeX,
+    #only.contents = getOption("xtable.only.contents", T),
+    sanitize.colnames.function = getOption("xtable.sanitize.colnames.function", NULL),
+    include.rownames = FALSE,
+    include.colnames = T,
+       #hline.after = 3,
+    caption.placement = "bottom",
+    #size = "small",
+    file = "TablesAndFigures/FullEstimates.txt",
+)
+
+```
+
+## Contrasts ##
+
+And now, let's generate some category specific contrasts. First we'll tabulate the absolute probability differences between the hunting and the gathering game.
+
+```{r}
+GameContrasts <- ps_CrGtrSrA %>% 
+  mutate(
+     Pay1_Prize1_Younger_Female_GameContrast = Pay1_Prize1_Younger_Hunt_Female - Pay1_Prize1_Younger_Forage_Female 
+    ,Pay1_Prize0_Younger_Female_GameContrast = Pay1_Prize0_Younger_Hunt_Female - Pay1_Prize0_Younger_Forage_Female 
+    ,Pay0_Prize1_Younger_Female_GameContrast = Pay0_Prize1_Younger_Hunt_Female - Pay0_Prize1_Younger_Forage_Female 
+    ,Pay0_Prize0_Younger_Female_GameContrast = Pay0_Prize0_Younger_Hunt_Female - Pay0_Prize0_Younger_Forage_Female  
+    ,Pay1_Prize1_Younger_Male_GameContrast = Pay1_Prize1_Younger_Hunt_Male - Pay1_Prize1_Younger_Forage_Male 
+    ,Pay1_Prize0_Younger_Male_GameContrast = Pay1_Prize0_Younger_Hunt_Male - Pay1_Prize0_Younger_Forage_Male 
+    ,Pay0_Prize1_Younger_Male_GameContrast = Pay0_Prize1_Younger_Hunt_Male - Pay0_Prize1_Younger_Forage_Male   
+    ,Pay0_Prize0_Younger_Male_GameContrast = Pay0_Prize0_Younger_Hunt_Male - Pay0_Prize0_Younger_Forage_Male 
+    ,Pay1_Prize1_Older_Female_GameContrast = Pay1_Prize1_Older_Hunt_Female - Pay1_Prize1_Older_Forage_Female 
+    ,Pay1_Prize0_Older_Female_GameContrast = Pay1_Prize0_Older_Hunt_Female - Pay1_Prize0_Older_Forage_Female 
+    ,Pay0_Prize1_Older_Female_GameContrast = Pay0_Prize1_Older_Hunt_Female - Pay0_Prize1_Older_Forage_Female 
+    ,Pay0_Prize0_Older_Female_GameContrast = Pay0_Prize0_Older_Hunt_Female - Pay0_Prize0_Older_Forage_Female 
+    ,Pay1_Prize1_Older_Male_GameContrast = Pay1_Prize1_Older_Hunt_Male - Pay1_Prize1_Older_Forage_Male 
+    ,Pay1_Prize0_Older_Male_GameContrast = Pay1_Prize0_Older_Hunt_Male - Pay1_Prize0_Older_Forage_Male 
+    ,Pay0_Prize1_Older_Male_GameContrast = Pay0_Prize1_Older_Hunt_Male - Pay0_Prize1_Older_Forage_Male 
+    ,Pay0_Prize0_Older_Male_GameContrast = Pay0_Prize0_Older_Hunt_Male - Pay0_Prize0_Older_Forage_Male
+    ) %>%
+    select(ends_with("GameContrast")) %>%
+    pivot_longer(
+    cols = everything(),
+    names_to = "Contrasts",
+    values_to = "Estimate"
+    )  
+
+GameContrasts  %>%
+    group_by(Contrasts) %>% 
+    mean_hdci(Estimate,.width = .9) %>%
+    mutate_if(is_double, round, 2)
+```
+
+We can see that the Pay0;Prize1 conditions are outliers here. What is the mean probability overall increase moving from the foraging game to the hunting game excluding our Pay0;Prize1 conditions?
+
+```{r}
+  GameContrasts  %>%
+    filter(!grepl("Pay0_Prize1",Contrasts)) %>%
+    mean_hdci(Estimate,.width = .9) %>%
+    mutate_if(is_double, round, 2)
+```
+
+
+And ridgeplots:
+
+```{r, echo = F}
+GameContrasts  %>%
+  ggplot(aes(x = Estimate, y = Contrasts)) + geom_density_ridges() + coord_cartesian(xlim = c(-.05, .3)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5)
+```
+
+Next, we'll explore the differences per category between the paid and non-paid conditions.
+
+```{r}
+PayContrasts <- ps_CrGtrSrA %>% 
+  mutate(
+       Prize1_Younger_Forage_Female_PayContrast = Pay0_Prize1_Younger_Forage_Female - Pay1_Prize1_Younger_Forage_Female 
+      ,Prize0_Younger_Forage_Female_PayContrast = Pay0_Prize0_Younger_Forage_Female - Pay1_Prize0_Younger_Forage_Female   
+      ,Prize1_Younger_Hunt_Female_PayContrast = Pay0_Prize1_Younger_Hunt_Female - Pay1_Prize1_Younger_Hunt_Female 
+      ,Prize0_Younger_Hunt_Female_PayContrast = Pay0_Prize0_Younger_Hunt_Female - Pay1_Prize0_Younger_Hunt_Female    
+      ,Prize1_Younger_Forage_Male_PayContrast = Pay0_Prize1_Younger_Forage_Male - Pay1_Prize1_Younger_Forage_Male  
+      ,Prize0_Younger_Forage_Male_PayContrast = Pay0_Prize0_Younger_Forage_Male - Pay1_Prize0_Younger_Forage_Male   
+      ,Prize1_Younger_Hunt_Male_PayContrast = Pay0_Prize1_Younger_Hunt_Male - Pay1_Prize1_Younger_Hunt_Male   
+      ,Prize0_Younger_Hunt_Male_PayContrast = Pay0_Prize0_Younger_Hunt_Male - Pay1_Prize0_Younger_Hunt_Male     
+      ,Prize1_Older_Forage_Female_PayContrast = Pay0_Prize1_Older_Forage_Female - Pay1_Prize1_Older_Forage_Female 
+      ,Prize0_Older_Forage_Female_PayContrast = Pay0_Prize0_Older_Forage_Female - Pay1_Prize0_Older_Forage_Female     
+      ,Prize1_Older_Hunt_Female_PayContrast = Pay0_Prize1_Older_Hunt_Female - Pay1_Prize1_Older_Hunt_Female 
+      ,Prize0_Older_Hunt_Female_PayContrast = Pay0_Prize0_Older_Hunt_Female - Pay1_Prize0_Older_Hunt_Female   
+      ,Prize1_Older_Forage_Male_PayContrast = Pay0_Prize1_Older_Forage_Male - Pay1_Prize1_Older_Forage_Male 
+      ,Prize0_Older_Forage_Male_PayContrast = Pay0_Prize0_Older_Forage_Male - Pay1_Prize0_Older_Forage_Male   
+      ,Prize1_Older_Hunt_Male_PayContrast = Pay0_Prize1_Older_Hunt_Male - Pay1_Prize1_Older_Hunt_Male 
+      ,Prize0_Older_Hunt_Male_PayContrast = Pay0_Prize0_Older_Hunt_Male - Pay1_Prize0_Older_Hunt_Male 
+    ) %>%
+    select(ends_with("PayContrast")) %>%
+    pivot_longer(
+    cols = everything(),
+    names_to = "Contrasts",
+    values_to = "Estimate"
+    )  
+
+PayContrasts  %>%
+    group_by(Contrasts) %>% 
+    mean_hdci(Estimate,.width = .9) %>%
+    mutate_if(is_double, round, 2)
+```
+Let's visualise with some some helpful ridgeplots.
+
+```{r}
+PayContrasts  %>%
+  ggplot(aes(x = Estimate, y = Contrasts)) + geom_density_ridges() + coord_cartesian(xlim = c(-0, 1)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5)
+```
+
+Next the differences between the prize, no-prize conditions:
+
+```{r}
+PrizeContrasts <- ps_CrGtrSrA %>% 
+  mutate(
+         Pay1_Younger_Forage_Female_PrizeContrast = Pay1_Prize1_Younger_Forage_Female - Pay1_Prize0_Younger_Forage_Female  
+        ,Pay0_Younger_Forage_Female_PrizeContrast = Pay0_Prize1_Younger_Forage_Female - Pay0_Prize0_Younger_Forage_Female  
+        ,Pay1_Younger_Hunt_Female_PrizeContrast = Pay1_Prize1_Younger_Hunt_Female - Pay1_Prize0_Younger_Hunt_Female  
+        ,Pay0_Younger_Hunt_Female_PrizeContrast = Pay0_Prize1_Younger_Hunt_Female - Pay0_Prize0_Younger_Hunt_Female   
+        ,Pay1_Younger_Forage_Male_PrizeContrast = Pay1_Prize1_Younger_Forage_Male - Pay1_Prize0_Younger_Forage_Male  
+        ,Pay0_Younger_Forage_Male_PrizeContrast = Pay0_Prize1_Younger_Forage_Male - Pay0_Prize0_Younger_Forage_Male   
+        ,Pay1_Younger_Hunt_Male_PrizeContrast = Pay1_Prize1_Younger_Hunt_Male - Pay1_Prize0_Younger_Hunt_Male  
+        ,Pay0_Younger_Hunt_Male_PrizeContrast = Pay0_Prize1_Younger_Hunt_Male - Pay0_Prize0_Younger_Hunt_Male    
+        ,Pay1_Older_Forage_Female_PrizeContrast = Pay1_Prize1_Older_Forage_Female - Pay1_Prize0_Older_Forage_Female    
+        ,Pay0_Older_Forage_Female_PrizeContrast = Pay0_Prize1_Older_Forage_Female - Pay0_Prize0_Older_Forage_Female    
+        ,Pay1_Older_Hunt_Female_PrizeContrast = Pay1_Prize1_Older_Hunt_Female - Pay1_Prize0_Older_Hunt_Female  
+        ,Pay0_Older_Hunt_Female_PrizeContrast = Pay0_Prize1_Older_Hunt_Female - Pay0_Prize0_Older_Hunt_Female  
+        ,Pay1_Older_Forage_Male_PrizeContrast = Pay1_Prize1_Older_Forage_Male - Pay1_Prize0_Older_Forage_Male  
+        ,Pay0_Older_Forage_Male_PrizeContrast = Pay0_Prize1_Older_Forage_Male - Pay0_Prize0_Older_Forage_Male  
+        ,Pay1_Older_Hunt_Male_PrizeContrast = Pay1_Prize1_Older_Hunt_Male - Pay1_Prize0_Older_Hunt_Male  
+        ,Pay0_Older_Hunt_Male_PrizeContrast = Pay0_Prize1_Older_Hunt_Male - Pay0_Prize0_Older_Hunt_Male  
+    ) %>%
+    select(ends_with("PrizeContrast")) %>%
+    pivot_longer(
+    cols = everything(),
+    names_to = "Contrasts",
+    values_to = "Estimate"
+    )  
+
+PrizeContrasts  %>%
+    group_by(Contrasts) %>% 
+    mean_hdci(Estimate,.width = .9) %>%
+    mutate_if(is_double, round, 2)
+```
+
+Once again, let's see those ridge-plots!
+
+```{r}
+PrizeContrasts  %>%
+  ggplot(aes(x = Estimate, y = Contrasts)) + geom_density_ridges() + coord_cartesian(xlim = c(-0.2, 1)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5)
+```
+
+Now, the difference between genders
+
+```{r}
+GenderContrasts <- ps_CrGtrSrA %>%
+  mutate(
+     Pay1_Prize1_Younger_Forage_GenderContrast = Pay1_Prize1_Younger_Forage_Male - Pay1_Prize1_Younger_Forage_Female  
+    ,Pay1_Prize0_Younger_Forage_GenderContrast = Pay1_Prize0_Younger_Forage_Male - Pay1_Prize0_Younger_Forage_Female  
+    ,Pay0_Prize1_Younger_Forage_GenderContrast = Pay0_Prize1_Younger_Forage_Male - Pay0_Prize1_Younger_Forage_Female  
+    ,Pay0_Prize0_Younger_Forage_GenderContrast = Pay0_Prize0_Younger_Forage_Male - Pay0_Prize0_Younger_Forage_Female  
+    ,Pay1_Prize1_Younger_Hunt_GenderContrast = Pay1_Prize1_Younger_Hunt_Male - Pay1_Prize1_Younger_Hunt_Female  
+    ,Pay1_Prize0_Younger_Hunt_GenderContrast = Pay1_Prize0_Younger_Hunt_Male - Pay1_Prize0_Younger_Hunt_Female  
+    ,Pay0_Prize1_Younger_Hunt_GenderContrast = Pay0_Prize1_Younger_Hunt_Male - Pay0_Prize1_Younger_Hunt_Female  
+    ,Pay0_Prize0_Younger_Hunt_GenderContrast = Pay0_Prize0_Younger_Hunt_Male - Pay0_Prize0_Younger_Hunt_Female   
+    ,Pay1_Prize1_Older_Forage_GenderContrast = Pay1_Prize1_Older_Forage_Male - Pay1_Prize1_Older_Forage_Female
+    ,Pay1_Prize0_Older_Forage_GenderContrast = Pay1_Prize0_Older_Forage_Male - Pay1_Prize0_Older_Forage_Female  
+    ,Pay0_Prize1_Older_Forage_GenderContrast = Pay0_Prize1_Older_Forage_Male - Pay0_Prize1_Older_Forage_Female
+    ,Pay0_Prize0_Older_Forage_GenderContrast = Pay0_Prize0_Older_Forage_Male - Pay0_Prize0_Older_Forage_Female  
+    ,Pay1_Prize1_Older_Hunt_GenderContrast = Pay1_Prize1_Older_Hunt_Male - Pay1_Prize1_Older_Hunt_Female
+    ,Pay1_Prize0_Older_Hunt_GenderContrast = Pay1_Prize0_Older_Hunt_Male - Pay1_Prize0_Older_Hunt_Female
+    ,Pay0_Prize1_Older_Hunt_GenderContrast = Pay0_Prize1_Older_Hunt_Male - Pay0_Prize1_Older_Hunt_Female
+    ,Pay0_Prize0_Older_Hunt_GenderContrast = Pay0_Prize0_Older_Hunt_Male - Pay0_Prize0_Older_Hunt_Female
+) %>%
+  select(ends_with("GenderContrast")) %>%
+    pivot_longer(
+    cols = everything(),
+    names_to = "Contrasts",
+    values_to = "Estimate"
+  )  
+
+GenderContrasts  %>%
+    group_by(Contrasts) %>% 
+    mean_hdci(Estimate,.width = .9) %>%
+    mutate_if(is_double, round, 2)
+```
+
+Now with ridgeplots!
+
+```{r}
+GenderContrasts  %>%
+  ggplot(aes(x = Estimate, y = Contrasts)) + geom_density_ridges() + coord_cartesian(xlim = c(-0.05, .6)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5)
+
+```
+
+Let's take the averages for some specific contrasts. First, let's look at the average for the pay condition contrasts for the hunting game:
+
+```{r}
+  GenderContrasts  %>%
+    filter(grepl("Pay1",Contrasts)) %>%
+    filter(grepl("Hunt",Contrasts)) %>%
+    mean_hdci(Estimate,.width = .9) %>%
+    mutate_if(is_double, round, 2)
+```
+
+And the averages absolute probability increase for the pay0 prize0 contrast:
+
+```{r}
+  GenderContrasts  %>%
+    filter(grepl("Pay0_Prize0",Contrasts)) %>%
+    mean_hdci(Estimate,.width = .9) %>%
+    mutate_if(is_double, round, 2)
+```
+
+
+And finally the younger-older age contrasts:
+
+```{r}
+AgeContrasts <- ps_CrGtrSrA %>% 
+  mutate(
+         Pay1_Prize1_Forage_Female_AgeContrast = Pay1_Prize1_Younger_Forage_Female - Pay1_Prize1_Older_Forage_Female 
+        ,Pay1_Prize0_Forage_Female_AgeContrast = Pay1_Prize0_Younger_Forage_Female - Pay1_Prize0_Older_Forage_Female 
+        ,Pay0_Prize1_Forage_Female_AgeContrast = Pay0_Prize1_Younger_Forage_Female - Pay0_Prize1_Older_Forage_Female 
+        ,Pay0_Prize0_Forage_Female_AgeContrast = Pay0_Prize0_Younger_Forage_Female - Pay0_Prize0_Older_Forage_Female 
+        ,Pay1_Prize1_Hunt_Female_AgeContrast = Pay1_Prize1_Younger_Hunt_Female - Pay1_Prize1_Older_Hunt_Female 
+        ,Pay1_Prize0_Hunt_Female_AgeContrast = Pay1_Prize0_Younger_Hunt_Female - Pay1_Prize0_Older_Hunt_Female 
+        ,Pay0_Prize1_Hunt_Female_AgeContrast = Pay0_Prize1_Younger_Hunt_Female - Pay0_Prize1_Older_Hunt_Female 
+        ,Pay0_Prize0_Hunt_Female_AgeContrast = Pay0_Prize0_Younger_Hunt_Female - Pay0_Prize0_Older_Hunt_Female  
+        ,Pay1_Prize1_Forage_Male_AgeContrast = Pay1_Prize1_Younger_Forage_Male - Pay1_Prize1_Older_Forage_Male 
+        ,Pay1_Prize0_Forage_Male_AgeContrast = Pay1_Prize0_Younger_Forage_Male - Pay1_Prize0_Older_Forage_Male 
+        ,Pay0_Prize1_Forage_Male_AgeContrast = Pay0_Prize1_Younger_Forage_Male - Pay0_Prize1_Older_Forage_Male  
+        ,Pay0_Prize0_Forage_Male_AgeContrast = Pay0_Prize0_Younger_Forage_Male - Pay0_Prize0_Older_Forage_Male 
+        ,Pay1_Prize1_Hunt_Male_AgeContrast = Pay1_Prize1_Younger_Hunt_Male - Pay1_Prize1_Older_Hunt_Male 
+        ,Pay1_Prize0_Hunt_Male_AgeContrast = Pay1_Prize0_Younger_Hunt_Male - Pay1_Prize0_Older_Hunt_Male 
+        ,Pay0_Prize1_Hunt_Male_AgeContrast = Pay0_Prize1_Younger_Hunt_Male - Pay0_Prize1_Older_Hunt_Male   
+        ,Pay0_Prize0_Hunt_Male_AgeContrast = Pay0_Prize0_Younger_Hunt_Male - Pay0_Prize0_Older_Hunt_Male 
+    ) %>%
+    select(ends_with("AgeContrast")) %>%
+    pivot_longer(
+    cols = everything(),
+    names_to = "Contrasts",
+    values_to = "Estimate"
+    )  
+
+AgeContrasts  %>%
+    group_by(Contrasts) %>% 
+    mean_hdci(Estimate,.width = .9) %>%
+    mutate_if(is_double, round, 2) %>%
+    arrange(desc(Estimate))
+
+ 
+   
+```
+
+Finally, the final ridgeplots.
+
+```{r}
+AgeContrasts  %>%
+  ggplot(aes(x = Estimate, y = Contrasts)) + geom_density_ridges() + coord_cartesian(xlim = c(-0.1, .3)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5)
+
+```
+
+### Final Figures ###
+
+Last but not least we'll put all these contrasts together into presentable figures. Let's start with a little data wrangling.
+
+```{r}
+GameContrasts %<>% mutate(ContrastType = "Game Contrasts")
+PayContrasts %<>% mutate(ContrastType = "Pay Contrasts")
+PrizeContrasts %<>% mutate(ContrastType = "Prize Contrasts")
+GenderContrasts %<>% mutate(ContrastType = "Gender Contrasts")
+AgeContrasts %<>% mutate(ContrastType = "Age Contrasts")
+
+AllContrasts <- rbind(GameContrasts, PrizeContrasts, PayContrasts, GenderContrasts, AgeContrasts) %>%
+  separate(Contrasts, c("A", "B", "C", "D", "E"), sep = "_") %>%
+  unite(c("A", "B", "C", "D"), col = "Contrasts", sep = ";")
+```
+
+Now let's add a splash of colour to our axis labels.
+
+```{r}
+AllContrasts %<>%
+  mutate_if(is.character, 
+      str_replace_all, pattern = "Hunt", replacement = "<b style='color:#e99636'>Aim</b>") %>%
+  mutate_if(is.character, 
+      str_replace_all, pattern = "Forage", replacement = "<b style='color:#3c5c33'>Search</b>") %>%
+    mutate_if(is.character, 
+      str_replace_all, pattern = "Younger", replacement = "<b style='color:#61b8eb'>Younger</b>") %>%
+    mutate_if(is.character, 
+      str_replace_all, pattern = "Older", replacement = "<b style='color:#e2a51e'>Older</b>") %>%
+    mutate_if(is.character, 
+      str_replace_all, pattern = "Male", replacement = "<b style='color:#0000FF'>Male</b>") %>%
+    mutate_if(is.character, 
+      str_replace_all, pattern = "Female", replacement = "<b style='color:#f4746c'>Female</b>") %>%
+    mutate_if(is.character, 
+      str_replace_all, pattern = "Prize0", replacement = "<b style='color:#FE9A84'>No Prize</b>") %>%
+    mutate_if(is.character, 
+      str_replace_all, pattern = "Prize1", replacement = "<b style='color:#7d5791'>Prizes</b>") %>%
+    mutate_if(is.character, 
+      str_replace_all, pattern = "Pay0", replacement = "<b style='color:#005059'>Free</b>") %>%
+    mutate_if(is.character, 
+      str_replace_all, pattern = "Pay1", replacement = "<b style='color:#660000'>Costly</b>")
+```
+
+Now let's look at all of them together.
+
+```{r}
+
+
+ContrastTable <- AllContrasts %>%
+  group_by(Contrasts, ContrastType) %>% 
+  mean_hdci(Estimate,.width = .9) %>% 
+  ggplot(aes(x = Estimate, y = Contrasts))  + geom_point() +  
+  geom_errorbar(aes(xmin = .lower, xmax = .upper), width=0, lwd = 1)  + 
+  facet_grid(rows = vars(ContrastType), scales = "free") + xlab("Absolute difference in per-round play probability") +  coord_cartesian(xlim = c(-0.25, 1)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5) +
+  theme(axis.text.y = element_markdown())
+
+ContrastTable
+
+ggsave(
+  plot = ContrastTable,
+  file = "ContrastTable.pdf",
+  path = "TablesAndFigures",
+  width = 21,
+  height = 30,
+  units = "cm")
+```
+
+This figure contains everything, which is perhaps too much information. So let's chop this up into more managable chunks. First, we'll seperate the pay and prize contrasts (i.e., What we've called 'condition' in the paper').
+
+```{r}
+ContrastTableCondition <- AllContrasts %>%
+  filter(ContrastType == "Prize Contrasts" | ContrastType == "Pay Contrasts") %>%
+  group_by(Contrasts, ContrastType) %>% 
+  mean_hdci(Estimate,.width = .9) %>% 
+  ggplot(aes(x = Estimate, y = Contrasts))  + geom_point() +  
+  geom_errorbar(aes(xmin = .lower, xmax = .upper), width=0, lwd = 1)  + 
+  facet_grid(rows = vars(ContrastType), scales = "free") + xlab("Absolute difference in per-round play probability") +  coord_cartesian(xlim = c(-0.25, 1)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5) +
+  theme(axis.text.y = element_markdown())
+
+ContrastTableCondition
+
+ggsave(
+  plot = ContrastTableCondition,
+  file = "ContrastTableCondition.pdf",
+  path = "TablesAndFigures",
+  width = 21,
+  height = 15,
+  units = "cm")
+
+```
+
+That's slightly easier to follow. Let's do a couple more, first just hunting versus gathering game.
+
+```{r}
+
+ContrastTableGame <- AllContrasts %>%
+  filter(ContrastType == "Game Contrasts") %>%
+  group_by(Contrasts, ContrastType) %>% 
+  mean_hdci(Estimate,.width = .9) %>% 
+  ggplot(aes(x = Estimate, y = Contrasts))  + geom_point() +  
+  geom_errorbar(aes(xmin = .lower, xmax = .upper), width=0, lwd = 1)  + 
+  facet_grid(rows = vars(ContrastType), scales = "free") + xlab("Absolute difference in per-round play probability") +  coord_cartesian(xlim = c(0, 1)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5) +
+  theme(axis.text.y = element_markdown())
+
+ContrastTableGame
+
+ggsave(
+  plot = ContrastTableGame,
+  file = "ContrastTableGame.pdf",
+  path = "TablesAndFigures",
+  width = 21,
+  height = 10,
+  units = "cm")
+
+
+
+```
+
+Last but not least we'll put the age and gender contrasts together. 
+
+```{r}
+
+ContrastTableAgeGender <- AllContrasts %>%
+  filter(ContrastType == "Gender Contrasts" | ContrastType == "Age Contrasts") %>%
+  group_by(Contrasts, ContrastType) %>% 
+  mean_hdci(Estimate,.width = .9) %>% 
+  ggplot(aes(x = Estimate, y = Contrasts))  + geom_point() +  
+  geom_errorbar(aes(xmin = .lower, xmax = .upper), width=0, lwd = 1)  + 
+  facet_grid(rows = vars(ContrastType), scales = "free") + xlab("Absolute difference in per-round play probability") +  coord_cartesian(xlim = c(0, 1)) + geom_vline(xintercept=0, linetype="dashed", color = "#696969", size=.5) +
+  theme(axis.text.y = element_markdown())
+
+ContrastTableAgeGender
+
+
+ggsave(
+  plot = ContrastTableAgeGender,
+  file = "ContrastTableAgeGender.pdf",
+  path = "TablesAndFigures",
+  width = 21,
+  height = 15,
+  units = "cm")
+
+```
+
+And we're done! Let's finish by printing out our session info.
+
+```{r}
+sessionInfo()
+```

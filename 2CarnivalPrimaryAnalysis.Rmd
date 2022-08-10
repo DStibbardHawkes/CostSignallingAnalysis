@@ -1,0 +1,548 @@
+---
+title: "Cost for Signalling: Primary Analysis"
+output: html_notebook
+---
+
+### Packages and Data ###
+
+In this document we'll run our primary analysis and model selection.
+
+We'll start by loading our packages. These analyses were last conducted on the following date:
+
+```{r}
+date()
+```
+
+If any of the packages or functions used in this analysis are now broken or depreciated, consider using the groundhog package with this date to load packages
+
+```{r}
+##load packages (all on CRAN; use install.packages() if first time)
+library(tidyverse) #Load dplyr, ggplot and others
+library(brms) #Bayesian regressions with STAN
+library(tidybayes) #Useful functions for describing posterior (e.g., mean_hdi)
+library(ggplot2) #Good-looking visualization package
+library(bayesplot) #Quick and easy coef plots.
+library(ggridges) #Fancy density ridgeplots for fancy people.
+library(magrittr) #For two-way pipes
+library(rstudioapi) #Allows RStudio to get the current working directory.
+library(patchwork) #Easily stitch figures together with operators.
+library(xtable) # Brings many types table format to the table. Used here to export LaTeX tables.  
+library(ggtext) #Use HTML Elements in GGPlot
+``` 
+
+Next lets load our data. This uses the rstudio API and requires that the appropriate .rda file be in the same folder as this script. If you're running these analyses from scratch, please run the data preparation file first.
+
+```{r}
+setwd(dirname(getActiveDocumentContext()$path))
+load("carnivaldata.rda")
+head(d)
+```
+
+In case there are any sources of (psuedo-)random variation in our functions, let's set a RNG seed.
+
+```{r}
+set.seed(42)
+```
+
+Now let's run our primary analyses
+
+## Analyses ##
+
+First we'll start with a mean only model, followed by a model including game-type only. We're going to use zero-centred weak regularizing priors throughout. Regularizing priors usually result in better out of sample fit, as simulated in section 7.3 of rethinking. As an added bonus, they also stop BRMs warning of insufficient MCMC samples.
+
+```{r}
+
+Baseline <- brm(
+  data = d, family = bernoulli,
+  Played1 ~ 1,
+  prior = c(prior(normal(0, 1), class = Intercept)),
+  iter = 10000, warmup = 5000, cores = 4, chains = 4,
+  #control = list(adapt_delta = .9),
+  seed = 42,
+  file = "fits/Baseline"
+)
+
+Baseline <- add_criterion(Baseline, criterion = c("loo", "waic")) 
+
+GameType <- brm(
+  data = d, family = bernoulli,
+  Played1 ~ 0 + Game_Type,
+  prior = c(prior(normal(0, 1), class = b)),
+  iter = 10000, warmup = 5000, cores = 4, chains = 4,
+  #control = list(adapt_delta = .9),
+  seed = 42,
+  file = "fits/GameType"
+)
+
+GameType <- add_criterion(GameType, criterion = c("loo", "waic")) 
+
+```
+
+Let's briefly inspect the outputs with a quick coefficient plot.
+
+```{r}
+
+GtPlot <- posterior_samples(GameType) %>% 
+  select(starts_with("b_")) %>%
+  inv_logit_scaled() %>%
+   mcmc_intervals(prob = .5,
+                 point_est = "mean")
+
+GtDiffPlot <- posterior_samples(GameType) %>% 
+  select(starts_with("b_")) %>%
+  inv_logit_scaled() %>%
+  mutate(Dif = b_Game_TypeHUNT - b_Game_TypeFORAGE) %>%
+  select(Dif) %>%
+   mcmc_intervals(prob = .5,
+                 point_est = "mean")
+
+GtPlot +
+GtDiffPlot +
+plot_layout(ncol = 2)
+
+```
+As we can see, there are substantial differences between game types, and no overlap in distributions. The model including game type will almost certainly outperform the mean only model, but let's confirm that with a brief model selection
+
+```{r}
+ms1 <- loo_compare(Baseline, GameType, criterion = "loo") %>%
+  round(digits = 2) %>% 
+  as.data.frame() %>% 
+  select(elpd_diff,se_diff) %>% 
+  rownames_to_column() %>%
+  arrange(rowname)
+  
+ms1 <- model_weights(Baseline, GameType, weights = "loo") %>% 
+  round(digits = 2) %>%
+  as.data.frame() %>% 
+  rownames_to_column() %>%
+  arrange(rowname) %>%
+  column_to_rownames("rowname") %>%
+  cbind(ms1) %>%
+  rename(
+    Weights = ".",
+    "ELPD Difference" = elpd_diff,
+    "SE Difference" = "se_diff"
+  ) %>%
+  arrange(desc(`ELPD Difference`)) %>%
+  select(-rowname)
+  
+ms1
+```
+
+People were far more likely to play the hunting than the gathering game. We'll explore how this differed by sex and age soon. However, first we should look at our study conditions. We ran rounds with and without prizes, and we ran rounds with and without a cost to pay. These could be coded as two binary variables (prize = 0/1; pay = 0/1), or as an equivalent four factor variable. I've chosen to do the latter (e.g. see [McElreath, 2021, Chapter 11]()).
+
+Let's start simply by examining condition-specific differences, with varying effects for game type. 
+
+```{r}
+
+CrGt <- brm(data = d,
+              family = bernoulli,
+              Played1 ~ 0 + Condition + (0 + Condition | Game_Type),
+              prior = c(prior(normal(0, 1), class = b)
+                        ,prior(exponential(1), class = sd, group = Game_Type)
+                        ,prior(lkj(2), class = cor, group = Game_Type)),
+              seed = 42,
+              iter = 10000, warmup = 5000, chains = 4, cores = 4,
+              control = list(adapt_delta = .99),
+              #These options banish some error messages but takes a while to run. 
+              #Consider adjusting if you're not using a fast CPU.
+              file = "fits/CrGt",
+          )
+
+CrGt <- add_criterion(CrGt, criterion = c("loo", "waic")) 
+
+```
+
+You'll see I've used descriptive model names. I find these easier to work with than numbered models. I've abbreviated condition to C, Game_Type to gt etc. Lower case r represents random (i.e. varying) effects. 
+
+Let's see if this model improves upon the previous model in a model selection
+
+```{r}
+ms2 <- loo_compare(Baseline, GameType, CrGt, criterion = "loo") %>%
+  round(digits = 2) %>% 
+  as.data.frame() %>% 
+  select(elpd_diff,se_diff) %>% 
+  rownames_to_column() %>%
+  arrange(rowname)
+  
+ms2 <- model_weights(Baseline, GameType, CrGt, weights = "loo") %>% 
+  round(digits = 2) %>%
+  as.data.frame() %>% 
+  rownames_to_column() %>%
+  arrange(rowname) %>%
+  column_to_rownames("rowname") %>%
+  cbind(ms2) %>%
+  rename(
+    Weights = ".",
+    "ELPD Difference" = elpd_diff,
+    "SE Difference" = "se_diff"
+  ) %>%
+  arrange(desc(`ELPD Difference`)) %>%
+  select(-rowname)
+  
+ms2
+```
+It does, and substantially so. Let's inspect our fitted values. 
+
+```{r}
+
+
+nd <-  d %>% 
+  distinct(Condition, Game_Type)
+
+CrGtFit <- fitted(CrGt, newdata = nd, probs = c(.05,.95)) %>% 
+  data.frame() %>% 
+  bind_cols(nd) %>%
+  unite(col = "new", c(Condition, Game_Type), sep = "_") %>%
+  ggplot(aes(x = Estimate, y = new)) + geom_point() + geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1)
+
+CrGtFit
+
+```
+As we can see the differences in popularity between the hunting and foraging game are preserved when we introduce game type. The hunting game is in every instance more popular than the gathering game. 
+
+We also see substantial differences between conditions.The no pay conditions were both greatly more popular than the pay conditions. The presence of a prize also increased the probability of playing except, unexpectedly, between the two paid hunting conditions. The jump from no pay no prize to pay prize is very large. However given that this condition had only one round, this is probably explicable by the fact that there was attrition between games. We'll control for this soon. 
+
+But first, gender. As we know, our data are cross-classified by sex and game type. Let's introduce gender to the model as a grouping variable. 
+
+```{r}
+
+CrGtrS <- brm(data = d,
+              family = bernoulli,
+              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + (0 + Condition | sex),
+              prior = c(prior(normal(0, 1), class = b)
+                        ,prior(exponential(1), class = sd, group = Game_Type)
+                        ,prior(lkj(2), class = cor, group = Game_Type)
+                        ,prior(exponential(1), class = sd, group = sex)
+                        ,prior(lkj(2), class = cor, group = sex)
+                        ),
+              seed = 42,
+              iter = 10000, warmup = 5000, chains = 4, cores = 4,
+              control = list(adapt_delta = .97),
+              #These settings banish some error messages but the model takes a while to run. 
+              #Consider adjusting if you're not using a fast CPU.
+              file = "fits/CrGtrS",
+          )
+
+CrGtrS <- add_criterion(CrGtrS, criterion = c("loo", "waic")) 
+```
+
+Let's see if this outperforms the previous models in a model selection
+
+```{r}
+ms3 <- loo_compare(Baseline, GameType, CrGt, CrGtrS, criterion = "loo") %>%
+  round(digits = 2) %>% 
+  as.data.frame() %>% 
+  select(elpd_diff,se_diff) %>% 
+  rownames_to_column() %>%
+  arrange(rowname)
+  
+ms3 <- model_weights(Baseline, GameType, CrGt, CrGtrS, weights = "loo") %>% 
+  round(digits = 2) %>%
+  as.data.frame() %>% 
+  rownames_to_column() %>%
+  arrange(rowname) %>%
+  column_to_rownames("rowname") %>%
+  cbind(ms3) %>%
+  rename(
+    Weights = ".",
+    "ELPD Difference" = elpd_diff,
+    "SE Difference" = "se_diff"
+  ) %>%
+  arrange(desc(`ELPD Difference`)) %>%
+  select(-rowname)
+  
+ms3
+```
+
+Yes, including participant gender substantially improves the model.
+
+And let's inspect the fitted values
+
+```{r}
+
+nd <-  d %>% 
+  distinct(sex, Condition, Game_Type)
+
+CrGtrSFitM <- fitted(CrGtrS, newdata = nd, probs = c(.05,.95)) %>% 
+  data.frame() %>% 
+  bind_cols(nd) %>%
+  filter(sex == "M") %>%
+  unite(col = "new", c(Condition, Game_Type), sep = "_") %>%
+  ggplot(aes(x = Estimate, y = new)) + geom_point(color = "blue") + geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  color = "blue") 
+
+
+CrGtrSFitF <- fitted(CrGtrS, newdata = nd, probs = c(.05,.95)) %>% 
+  data.frame() %>% 
+  bind_cols(nd) %>%
+  filter(sex == "F") %>%
+  unite(col = "new", c(Condition, Game_Type), sep = "_") %>%
+  ggplot(aes(x = Estimate, y = new)) + geom_errorbar(aes(xmin = Q5, xmax = Q95), color = "hotpink", width=0, lwd = 1) + geom_point(color = "hotpink")  + theme(axis.title = element_blank(), axis.text.y=element_blank())
+
+
+CrGtrSFitM + CrGtrSFitF + plot_layout(ncol = 2)
+```
+
+As we can see, women almost universally were less inclined to play across conditions. The patterning of results is otherwise similar - the hunting game was more popular across genders.  There were two notable sex differences. Women were substantially less likely to participate in the no pay no bracelet condition that were men, despite overlapping distributions for the no pay, bracelet condition. Also, contrary to expectations, men were more likely to pay to play in the pay no bracelet condition than the pay bracelet condition.
+
+We're also interested in the impacts of age. Younger people potentially have more to gain by showing off. Let's see how it performs both on its own and alongside gender. 
+
+First let's look at age on its own. In the first model we'll use age without binning. As we're only interested in broad trends, rather than year-by-year changes, we'll also code age as a binary variable in the 2nd model using median age split (i.e., 37 years).
+
+```{r}
+A <- brm(
+  data = d, family = bernoulli,
+  Played1 ~ 1 + age,
+  c(prior(normal(0, 10), class = Intercept),
+            prior(normal(0, 10), class = b)),
+  iter = 10000, warmup = 5000, cores = 4, chains = 4,
+  #control = list(adapt_delta = .9),
+  seed = 42,
+  file = "fits/Age"
+)
+
+A <- add_criterion(A, criterion = c("loo", "waic"))
+
+BinaryA <- brm(
+  data = d, family = bernoulli,
+  Played1 ~ 0 + AgeSplit,
+  prior = c(prior(normal(0, 1), class = b)),
+  iter = 10000, warmup = 5000, cores = 4, chains = 4,
+  #control = list(adapt_delta = .9),
+  seed = 42,
+  file = "fits/SplitAge"
+)
+
+BinaryA <- add_criterion(BinaryA, criterion = c("loo", "waic"))
+
+```
+
+
+Next let's plot change in play probability with increasing age, with all other variables excluded.
+
+```{r}
+Age_seq <- 
+  tibble(age = seq(from = 17, to = 75, length.out = 59))
+
+fitd_play <-
+  fitted(A, newdata = Age_seq, probs = c(.05,.95)) %>%
+  data.frame() %>%
+  bind_cols(Age_seq)
+
+
+fig4 <-
+  ggplot(data = d, 
+       aes(x = age)) +
+  geom_smooth(data = fitd_play,
+              aes(y = Estimate, ymin = Q5, ymax = Q95),
+              stat = "identity",
+              fill = "grey70", color = "black", alpha = 1, size = 1/2) +
+ geom_point(aes(y = Played1),
+             color = "navyblue", 
+             shape = 1,
+             size = 1.5, alpha = 1/2) +
+  ylab("PlayProbability") +
+  scale_y_continuous(breaks = c(0,.1,.2,.3,.4,.5,.6,.7,.8,.9,1)) + 
+  scale_x_continuous(breaks = c(10,20,30,40,50,60,70)) + 
+  xlab("Age") +
+  theme(text = element_text(family = "Times"),
+        panel.grid = element_blank())
+
+fig4
+
+```
+
+Finally let's compare how much information gain age gives us 
+
+```{r}
+msA <- loo_compare(A, BinaryA, criterion = "loo") %>%
+  round(digits = 2) %>% 
+  as.data.frame() %>% 
+  select(elpd_diff,se_diff) %>% 
+  rownames_to_column() %>%
+  arrange(rowname)
+
+msA <- model_weights(A, BinaryA, weights = "loo") %>% 
+  round(digits = 2) %>%
+  as.data.frame() %>% 
+  rownames_to_column() %>%
+  arrange(rowname) %>%
+  column_to_rownames("rowname") %>%
+  cbind(msA) %>%
+  rename(
+    Weights = ".",
+    "ELPD Difference" = elpd_diff,
+    "SE Difference" = "se_diff"
+  ) %>%
+  arrange(desc(`ELPD Difference`)) %>%
+  select(-rowname) %>%
+  relocate(Weights, .after = "SE Difference") 
+
+msA
+```
+
+
+```{r}
+
+CrGtrA <- brm(data = d,
+              family = bernoulli,
+              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + (0 + Condition | AgeSplit),
+              prior = c(prior(normal(0, 1), class = b)
+                        ,prior(exponential(1), class = sd, group = Game_Type)
+                        ,prior(lkj(2), class = cor, group = Game_Type)
+                        ,prior(exponential(1), class = sd, group = AgeSplit)
+                        ,prior(lkj(2), class = cor, group = AgeSplit)
+                        ),
+              seed = 42,
+              iter = 10000, warmup = 5000, chains = 4, cores = 4,
+              control = list(adapt_delta = .99),
+              #This settings banish some error messages but takes a while to run. 
+              #Consider adjusting if you're not using a fast CPU.
+              file = "fits/CrGtrA",
+          )
+
+CrGtrA <- add_criterion(CrGtrA, criterion = c("loo", "waic"))
+
+
+CrGtrSrA <- brm(data = d,
+              family = bernoulli,
+              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + (0 + Condition | sex) + (0 + Condition | AgeSplit),
+              prior = c(prior(normal(0, 1), class = b)
+                        ,prior(exponential(1), class = sd, group = Game_Type)
+                        ,prior(lkj(2), class = cor, group = Game_Type)
+                        ,prior(exponential(1), class = sd, group = sex)
+                        ,prior(lkj(2), class = cor, group = sex)
+                        ,prior(exponential(1), class = sd, group = AgeSplit)
+                        ,prior(lkj(2), class = cor, group = AgeSplit)
+                        ),
+              seed = 42,
+              iter = 10000, warmup = 5000, chains = 4, cores = 4,
+              control = list(adapt_delta = .99),
+              #This settings banish some error messages but takes a while to run. 
+              #Consider adjusting if you're not using a fast CPU.
+              file = "fits/CrGtrSrA",
+          )
+
+CrGtrSrA <- add_criterion(CrGtrSrA, criterion = c("loo", "waic"))
+
+```
+
+Let's see how these perform relative to the models excluding age in a model selection. 
+
+```{r}
+
+
+ms4 <- loo_compare(Baseline, GameType, CrGt, CrGtrS,CrGtrA,CrGtrSrA, criterion = "loo") %>%
+  round(digits = 2) %>% 
+  as.data.frame() %>% 
+  select(elpd_diff,se_diff) %>% 
+  rownames_to_column() %>%
+  arrange(rowname)
+  
+ms4 <- model_weights(Baseline, GameType, CrGt, CrGtrS,CrGtrA,CrGtrSrA, weights = "loo") %>% 
+  round(digits = 2) %>%
+  as.data.frame() %>% 
+  rownames_to_column() %>%
+  arrange(rowname) %>%
+  column_to_rownames("rowname") %>%
+  cbind(ms4) %>%
+  rename(
+    Weights = ".",
+    "ELPD Difference" = elpd_diff,
+    "SE Difference" = "se_diff"
+  ) %>%
+  arrange(desc(`ELPD Difference`)) %>%
+  select(-rowname) %>%
+  relocate(Weights, .after = "SE Difference") %>% 
+  mutate(
+    Definition = c("0 + Condition + (0 + Condition | GameType) + (0 + Condition | Sex) + (0 + Condition | Age)"
+                   ,"0 + Condition + (0 + Condition | GameType) + (0 + Condition | Sex)"
+                   ,"0 + Condition + (0 + Condition | GameType) + (0 + Condition | Age)"
+                   ,"0 + Condition + (0 + Condition | GameType)"
+                   ,"0 + GameType"
+                   , "1") 
+    , .before = 1
+  )
+  
+ms4
+```
+
+Let's save this for the manuscript.
+
+```{r}
+ModelSelectionTable <- ms4 %>% 
+  xtable(label = "Tab:LooMS",
+         caption = "Leave-one-out model selection results including expected log-predictive density differences, standard errors and Akaike weights. Left side model definitions provided in BRMs syntax"
+         )
+
+print(
+  ModelSelectionTable,
+    #only.contents = getOption("xtable.only.contents", T),
+    sanitize.text.function = function(str) gsub("ef", "\\ref", str, fixed = TRUE),
+    sanitize.colnames.function = getOption("xtable.sanitize.colnames.function", NULL),
+    include.rownames = FALSE,
+    include.colnames = T,
+       #hline.after = 3,
+    caption.placement = "bottom",
+    size = "small",
+    file = "TablesAndFigures/LooMS.txt",
+)
+
+```
+
+Although the model including gender is allotted a small proportion of model weight, the model including age and gender is the best performing model by a substantial margin. Let's once again use fitted to visualise model predictions. 
+
+```{r}
+
+nd <-  d %>% 
+  distinct(AgeSplit, Condition, Game_Type, sex)
+
+CrGtrAFitM <- fitted(CrGtrSrA, newdata = nd, probs = c(.05,.95)) %>% 
+  data.frame() %>% 
+  bind_cols(nd) %>%
+  filter(sex == "M") %>%
+  unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
+  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9)) + 
+  theme(legend.position = "none") + scale_y_discrete(labels= c("P0B1F","P0B1H", "P0B0F", "P0B0H", "P1B1F","P1B1H", "P1B0F", "P1B0H"))
+
+
+CrGtrAFitF <- fitted(CrGtrSrA, newdata = nd, probs = c(.05,.95)) %>% 
+  data.frame() %>% 
+  bind_cols(nd) %>%
+  filter(sex == "F") %>%
+  unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
+  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9)) + 
+  theme(axis.title = element_blank(), axis.text.y=element_blank(), 
+        axis.ticks.y=element_blank(), legend.position = "none")
+
+
+CrGtrAFitM + CrGtrAFitF
+```
+
+I've stripped out figure legends here to save space, but in this figure predictions for men are provided on the  left, women on the right.
+
+As we can see, younger individuals were almost universally more likely to play across genders and conditions. The sex and condition specific differences are largely preserved (men above women below). This is our full model, including all study predictor variables of interest. There are still a few potential experimental artefacts which we haven't accounted for, and these are explored in the fourth analysis file. None of them substantial alter the findings presented here, however, so we'll report this model in the manuscript. 
+
+That being the case, we'll explore this model a little further in document three. 
+
+### Save and Finish ###
+
+For now, let's save our key model outputs.
+
+```{r}
+save(list = c("CrGtrSrA", "GameType", "CrGt", "CrGtrSrA"), file = "carnivalmodels.rda") 
+
+```
+
+And print our session info.
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+

@@ -1,0 +1,348 @@
+---
+title: "Cost for Signalling: Data Preperation and Summary Statistics"
+output: html_notebook
+---
+
+### Packages and Data ###
+
+In this document we'll prepare our data for analysis.
+
+We'll start by loading our packages. These analyses were last conducted on the following date:
+
+```{r}
+date()
+```
+
+If any of the packages or functions used in this analysis are now broken or depreciated, consider using the groundhog package with this date to load packages
+
+```{r}
+##load packages (all on CRAN; use install.packages() if first time)
+
+library(tidyverse) #Load dplyr, ggplot and others
+library(brms) #Bayesian regressions with STAN
+library(tidybayes) #Useful functions for describing posterior (e.g., mean_hdi)
+library(ggplot2) #Good-looking visualization package
+library(bayesplot) #Quick and easy coef plots.
+library(ggridges) #Fancy density ridgeplots for fancy people.
+library(magrittr) #For two-way pipes
+library(rstudioapi) #Allows RStudio to get the current working directory.
+library(patchwork) #Easily stitch figures together with operators.
+
+
+``` 
+
+Next lets load our data. This uses the rstudio API and requires that the data be in the same folder as this script.
+
+```{r}
+setwd(dirname(getActiveDocumentContext()$path))
+d <- read.csv("carnivallong.csv", header=TRUE, na.strings=c("","NA"))
+d %<>% tibble()
+head(d)
+```
+
+In case there are any sources of (psuedo-)random variation in our functions, let's set a RNG seed.
+
+```{r}
+set.seed(42)
+```
+
+Now, let's begin.
+
+## Data Preperation and Summary Statistics ##
+
+Here we'll explore our summary statistics and prepare our codings for analysis. We start by looking at gender. First, for BRMs, this should be coded this as a factor, so let's do that.
+
+```{r}
+d$sex %<>% factor()
+```
+
+Next we code which game was played first as a factor and compare counts.
+
+```{r}
+d$firstgame %<>% factor()
+table(d$firstgame)
+```
+
+Oddly, many more hunting games played first. This looks unbalanced but was actually decided by coin flip. Though it might look like our coin was biased this is a 1.5% chance of seeing this result with an underlying prob of .5, so stranger things have happened.
+
+```{r}
+dbinom(112, size = (89+112), prob = .5)
+```
+
+Now let's look at the summary statistics for age 
+
+```{r, Warning = F, echo = F}
+
+AgeTable <- d %>% 
+  summarise(mean = mean(age, na.rm = T) 
+            ,median = median(age, na.rm = T)
+            ,SD = sd(age, na.rm = T)
+            ,Lowest = min(age, na.rm = T)
+            ,Highest = max(age, na.rm = T)
+            ) %>%
+  round(2) %>%
+  mutate(
+    sex = "Combined" 
+  )
+
+d %>% 
+  group_by(sex) %>%
+  summarise(mean = mean(age, na.rm = T)
+            ,median = median(age, na.rm = T)
+            ,SD = sd(age, na.rm = T)
+            ,Lowest = min(age, na.rm = T)
+            ,Highest = max(age, na.rm = T)
+            ) %>% 
+  mutate_if(is_double, round, 2) %>%
+  rbind(AgeTable)
+
+```
+Quite similar statistics for both genders. 
+
+Now let's create a binary factor variable for median age split. Let's quickly visualise these as a histogram:
+
+```{r}
+AgeHist <- d%>%
+ggplot(aes(x = age)) + geom_histogram(binwidth = 2, color = "black") + geom_vline(xintercept = 37, color = "darkgreen", linetype = "longdash") + xlab("Age") + ylab("Frequency")
+
+ggsave(
+  plot = AgeHist,
+  file = "AgeHist.pdf",
+  path = "TablesAndFigures",
+  width = 20,
+  height = 10,
+  units = "cm")
+
+AgeHist
+
+```
+
+As we're not interested in year-by-year age effects, we'll create a separate binary category for those above and below mean age.
+
+```{r}
+
+d$AgeSplit <- case_when(d$age >= median(d$age, na.rm = T) ~ "Older",
+          d$age < median(d$age, na.rm = T) ~ "Younger") %>% 
+  as_factor()
+```
+
+Now we recode our yes/no 'played' and 'win' variables into 1/0 binaries. Played will act as a binary outcome variable. 
+
+```{r}
+
+d %<>%
+  mutate(across(c("h1played","h2played", "h3played", "h4played", "h5played", "h1win", "h2win","h3win","h4win","h5win",
+                  "f1played","f2played","f3played","f4played", "f5played", "f1win", "f2win","f3win","f4win","f5win"),
+                str_replace, "Y", "1")) %>%
+  mutate(across(c("h1played","h2played", "h3played", "h4played", "h5played", "h1win", "h2win","h3win","h4win","h5win",
+                  "f1played","f2played","f3played","f4played", "f5played", "f1win", "f2win","f3win","f4win","f5win"),
+                str_replace, "N", "0")) 
+
+```
+
+Now to deal with the NAs. Our statistical question is 'how likely were people to play each game dependent on A) their gender, B) their age, C) whether they were awarded with a bracelet and C) whether they had to pay to play, D) the game type they played'. As a consequence of the study design, we have a different number total opportunities to play for different conditions. It is easiest to model this using a binomial (or Poisson) regression, treating each opportunity to play as a Bernoulli trial. For that reason, we'll code each NA as a zero (alternatively we could leave the NAs alone and instead create a variable for rowsums and specifying n trials - but this is mathematically analogous).
+
+```{r}
+d %<>%
+  mutate(across(c("h1played","h2played", "h3played", "h4played", "h5played",
+                  "f1played","f2played","f3played","f4played","f5played"),
+                  replace_na, "0")) %>%
+    mutate(across(c("h1played","h2played", "h3played", "h4played", "h5played", "h1win", "h2win","h3win","h4win","h5win",
+                  "f1played","f2played","f3played","f4played", "f5played", "f1win", "f2win","f3win","f4win","f5win"),
+                  as.numeric))
+```
+
+This gives us the opportunity to see how many people did not pay to play at all:
+
+```{r}
+dpaid <- d %>%
+  mutate(
+    paid2playhunt = 
+      case_when(
+        (h2played+h3played+h4played+h5played) == 0 ~ 0
+        ,(h2played+h3played+h4played+h5played) > 0 ~ 1),
+        paid2playforage = 
+      case_when(
+        (f2played+f3played+f4played+f5played) == 0 ~ 0
+        ,(f2played+f3played+f4played+f5played) > 0 ~ 1
+      )
+  ) %>%
+  mutate(
+    paid2play = 
+      case_when(
+        (paid2playhunt+paid2playforage) == 0 ~ 0
+        ,(paid2playhunt+paid2playforage) > 0 ~ 1)
+      ) %>%  
+  filter(h2condition != "NoPay_NoBracelet")
+
+c(mean(dpaid$paid2playhunt), mean(dpaid$paid2playforage), mean(dpaid$paid2play)) %>% round(2)
+  
+```
+
+So, 26% of individuals paid to play at least once. 21% paid to play the hunting game, 8% paid to play the gathering game. Let's briefly disagregate by gender and do the same, first women:
+
+```{r}
+c(mean(dpaid$paid2playhunt[dpaid$sex == "F"]), mean(dpaid$paid2playforage[dpaid$sex == "F"]), mean(dpaid$paid2play[dpaid$sex == "F"])) %>% round(2)
+
+```
+
+Then men:
+
+```{r}
+
+c(mean(dpaid$paid2playhunt[dpaid$sex == "M"]), mean(dpaid$paid2playforage[dpaid$sex == "M"]), mean(dpaid$paid2play[dpaid$sex == "M"])) %>% round(2)
+
+rm(dpaid)
+
+```
+
+We also want to know whether winning and losing the previous round had an impact on game play probabilities. We'll add five columns for hunting and five for gathering, all factors which will take the value 'FIRSTROUND'  for the first round, 'WIN' when the previous round was successful, 'LOSE' when it wasn't and NA when there was no previous round.
+
+```{r}
+#First the hunting game
+
+d$h1previous  <- rep("FIRSTROUND", nrow(d))
+
+d$h2previous <- if_else(d$h1win == 1, "WIN",
+                      if_else(d$h1win == 0, "LOSE", "NA"
+                      ))
+
+d$h3previous <- if_else(d$h2win == 1, "WIN",
+                      if_else(d$h2win == 0, "LOSE", "NA"
+                      ))
+
+d$h4previous <- if_else(d$h3win == 1, "WIN",
+                      if_else(d$h3win == 0, "LOSE", "NA"
+                      ))
+
+d$h5previous <- if_else(d$h4win == 1, "WIN",
+                      if_else(d$h4win == 0, "LOSE", "NA"
+                      ))
+
+#Next the gathering game
+
+d$f1previous  <- rep("FIRSTROUND", nrow(d))
+
+d$f2previous <- if_else(d$f1win == 1, "WIN",
+                      if_else(d$f1win == 0, "LOSE", "NA"
+                      ))
+
+d$f3previous <- if_else(d$f2win == 1, "WIN",
+                      if_else(d$f2win == 0, "LOSE", "NA"
+                      ))
+
+d$f4previous <- if_else(d$f3win == 1, "WIN",
+                      if_else(d$f3win == 0, "LOSE", "NA"
+                      ))
+
+d$f5previous <- if_else(d$f4win == 1, "WIN",
+                      if_else(d$f4win == 0, "LOSE", "NA"
+                      ))
+
+```
+
+Now we'll pivot our data to long-form for analysis. First, lets pivot the hunting and foraging games.
+
+```{r}
+d%<>%
+  unite(c("prizehunt","h1played","h2played", "h3played", "h4played", "h5played", "h1win", "h2win","h3win","h4win","h5win", 
+          "h1condition", "h2condition","h3condition","h4condition","h5condition","h1previous", "h2previous","h3previous","h4previous","h5previous"), col = HUNT, sep = ",") %>%
+  unite(c("prizeforage","f1played","f2played", "f3played", "f4played", "f5played", "f1win", "f2win","f3win","f4win","f5win",
+          "f1condition", "f2condition","f3condition","f4condition","f5condition","f1previous", "f2previous","f3previous","f4previous","f5previous"), col = FORAGE, sep = ",") %>%
+  pivot_longer(cols = c("HUNT", "FORAGE"), names_to = "Game_Type", values_to = "Values") %>%
+  separate(col = "Values", sep = ",", 
+           into = c("Prize","1played","2played", "3played", "4played", "5played", "1win", "2win","3win","4win","5win",
+                 "1condition", "2condition","3condition","4condition","5condition","1previous", "2previous","3previous","4previous","5previous"))
+```
+
+Finally we'll pivot each round into long-form.
+
+```{r}
+
+d%<>%
+  unite(starts_with("1"), col = "1", sep = ",") %>%
+  unite(starts_with("2"), col = "2", sep = ",") %>%  
+  unite(starts_with("3"), col = "3", sep = ",") %>%  
+  unite(starts_with("4"), col = "4", sep = ",") %>%  
+  unite(starts_with("5"), col = "5", sep = ",") %>%
+  pivot_longer(cols = c("1", "2", "3", "4", "5"), names_to = "Round_Number", values_to = "Values") %>%
+  separate(col = "Values", sep = ",", 
+           into = c("Played1", "Win1", "Condition","Previous"))
+  
+```
+
+
+Binomial/Poisson regression assume that each trial independent. However, in our study, individuals are increasingly likely to stop playing with each consecutive round. To address this we will also  control for the effects of attrition in our model by including 'Round_Number' in our models as a predictor. We're assuming attrition is linear for the purposes of the present study. We'll also coerce a few of our other variables into the appropriate types
+
+```{r, warning = F}
+d%<>%
+  mutate(across(c("Played1", "Win1", "Round_Number"), as.numeric)) %>%   
+  mutate(across(c("Game_Type", "sex", "firstgame", "hadzapid", "Prize", "Condition", "Prize", "Previous", "campid"), as_factor))
+
+```
+
+Finally, let's now take a quick look at win probabilities. 
+
+```{r}
+d %>% group_by(Game_Type) %>%
+ summarise(mean = mean(Win1, na.rm = T) 
+            )
+```
+Let's tally our participant numbers, first overall.
+
+```{r}
+d %>%
+  distinct(hadzapid) %>% 
+  nrow()
+```
+
+Then men.
+
+```{r}
+d %>%
+  filter(sex == "M") %>%
+  distinct(hadzapid) %>%
+  nrow()
+```
+
+Which of course leaves 93 women, an equal split. 
+
+Lets also count how many camps we surveyed, first absolutely:
+
+```{r}
+d %>%
+  distinct(campid) %>%
+  nrow()
+```
+
+And now for only those camps with a prize
+
+```{r}
+d %>%
+  filter(Condition == "Pay_Bracelet" | Condition == "NoPay_Bracelet") %>%
+  distinct(campid) %>%
+  nrow()
+```
+
+Finally, lets count how many rounds of each type people had the opportunity to play (i.e. our per-condition sample size).
+
+```{r}
+table(d$Condition)
+```
+
+
+
+### Save and Finish ###
+
+Finally let's save our newly wrangled dataset as an rda file.
+
+```{r}
+save("d", file = "carnivaldata.rda")
+```
+
+And print our session info.
+
+```{r}
+sessionInfo()
+```
+

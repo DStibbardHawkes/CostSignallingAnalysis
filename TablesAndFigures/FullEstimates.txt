@@ -1,0 +1,29 @@
+% latex table generated in R 4.2.1 by xtable 1.8-4 package
+% Wed Aug 10 16:39:40 2022
+\begin{table}[ht]
+\centering
+\begin{tabular}{lllrlrl}
+  \hline
+Condition & Age & Game & p Male & 90\%CI Male & p Female & 90\%CI Female \\ 
+  \hline
+Pay1;Prize1 & Younger & Search & 0.06 & 0.04-0.09 & 0.04 & 0.02-0.06 \\ 
+  Pay1;Prize1 & Older & Search & 0.04 & 0.02-0.06 & 0.03 & 0.01-0.04 \\ 
+  Pay1;Prize1 & Younger & Aim & 0.13 & 0.09-0.17 & 0.09 & 0.06-0.13 \\ 
+  Pay1;Prize1 & Older & Aim & 0.09 & 0.05-0.12 & 0.06 & 0.03-0.08 \\ 
+  Pay1;Prize0 & Younger & Search & 0.02 & 0-0.04 & 0.00 & 0-0.01 \\ 
+  Pay1;Prize0 & Older & Search & 0.01 & 0-0.02 & 0.00 & 0-0 \\ 
+  Pay1;Prize0 & Younger & Aim & 0.27 & 0.15-0.39 & 0.04 & 0-0.09 \\ 
+  Pay1;Prize0 & Older & Aim & 0.15 & 0.05-0.25 & 0.02 & 0-0.04 \\ 
+  Pay0;Prize1 & Younger & Search & 0.99 & 0.99-1 & 0.99 & 0.98-1 \\ 
+  Pay0;Prize1 & Older & Search & 0.99 & 0.98-1 & 0.99 & 0.97-1 \\ 
+  Pay0;Prize1 & Younger & Aim & 1.00 & 0.99-1 & 0.99 & 0.99-1 \\ 
+  Pay0;Prize1 & Older & Aim & 0.99 & 0.98-1 & 0.99 & 0.98-1 \\ 
+  Pay0;Prize0 & Younger & Search & 0.49 & 0.41-0.57 & 0.11 & 0.07-0.15 \\ 
+  Pay0;Prize0 & Older & Search & 0.46 & 0.38-0.54 & 0.10 & 0.07-0.13 \\ 
+  Pay0;Prize0 & Younger & Aim & 0.62 & 0.54-0.7 & 0.18 & 0.13-0.23 \\ 
+  Pay0;Prize0 & Older & Aim & 0.59 & 0.51-0.67 & 0.16 & 0.11-0.21 \\ 
+   \hline
+\end{tabular}
+\caption{Mean posterior probabilities with 90 percent confidence intervals of playing any round by game type, pay/prize condition, age and gender.} 
+\label{Tab:FullModel}
+\end{table}
