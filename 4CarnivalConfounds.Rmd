@@ -76,7 +76,10 @@ FgGtFit <- fitted(FgGt, newdata = nd, probs = c(.05,.95)) %>%
   data.frame() %>% 
   bind_cols(nd) %>%
   unite(col = "new", c(firstgame, Game_Type), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new)) + geom_point() + geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1) + scale_y_discrete(labels= c("ForageGame_ForageFirst","HuntGame_ForageFirst", "ForageGame_HuntFirst", "HuntGame_HuntFirst"))
+  ggplot(aes(x = Estimate, y = new)) + geom_point() + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1) + 
+  scale_y_discrete(labels= c("ForageGame_ForageFirst","HuntGame_ForageFirst", 
+                             "ForageGame_HuntFirst", "HuntGame_HuntFirst"))
 
 FgGtFit
 ```
@@ -109,11 +112,11 @@ ms5 <- model_weights(GameType, FgGt, weights = "loo") %>%
 ms5
 ```
 
-As we can see, the model including first game is a represents a small improvement on the model including game type only, but the models are largely comparable. The first chosen game has a small but not substantial influence. Equivocal improvement in model fit, so probably not a substantial enough analysis to fully report in the text body.
+As we can see, the model including first game is a small improvement on the model including game type only, but the models are largely comparable. The first chosen game has a small but not substantial influence. Equivocal improvement in model fit, so probably not substantial to report in its entirity in the text body.
 
 ## Prize Colour
 
-The next question is does bracelet colour affect probability of playing. Since not all rounds had a prize, we're going to limit our selection here to those games which had bracelets.
+The next question is 'does bracelet colour affect probability of playing'. Since not all rounds had a prize, we're going to limit our selection here to those games which had bracelets.
 
 ```{r}
 dbracelet <- d %>%
@@ -133,7 +136,8 @@ PrizeConditionBaseline <- brm(
   file = "fits/PrizeConditionBaseline"
 )
 
-PrizeConditionBaseline <- add_criterion(PrizeConditionBaseline, criterion = c("loo")) 
+PrizeConditionBaseline <- add_criterion(PrizeConditionBaseline, 
+                                        criterion = c("loo")) 
 
 PrizeColor <- brm(data = dbracelet,
               family = bernoulli,
@@ -154,7 +158,7 @@ Let's briefly inspect our estimates. Only a single response variable so just a q
 mcmc_plot(PrizeColor)
 ```
 
-As we can see a mild preference for red bracelets but substantial overlap between distributions. Let's compare the model including prize colour to the baseline.
+As we can see, there's weak evidence of a preference for red bracelets but substantial overlap between distributions. Let's compare the model including prize colour to the baseline.
 
 ```{r}
 ms6 <- loo_compare(PrizeColor, PrizeConditionBaseline, criterion = "loo") %>%
@@ -186,7 +190,7 @@ Once again the results are equivocal, with some weight allotted to both models. 
 
 ## Outcome of Previous Round
 
-Next we'll examine impact of the outcome of the previous round. Are people more or less likely to play if they won or lost previously.
+Next we'll examine impact of the outcome of the previous round. Are people more or less likely to play if they won or lost previously?
 
 ```{r}
 Prv <- brm(data = d,
@@ -212,7 +216,9 @@ nd <- d %>%
 PrvFit <- fitted(Prv, newdata = nd, probs = c(.05,.95)) %>% 
   data.frame() %>% 
   bind_cols(nd) %>%
-  ggplot(aes(x = Estimate, y = Previous)) + geom_point() + geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1) + scale_y_discrete(labels= c("First Round","Lose", "No Data", "Win"))
+  ggplot(aes(x = Estimate, y = Previous)) + geom_point() + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1) + 
+  scale_y_discrete(labels= c("First Round","Lose", "No Data", "Win"))
 
 PrvFit
 ```
@@ -226,7 +232,9 @@ Let's dive deeper and include previous round results in the full model.
 ```{r}
 CrGtrSrArP <- brm(data = d,
               family = bernoulli,
-              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + (0 + Condition | sex) + (0 + Condition | AgeSplit) + (0 + Condition | Previous),
+              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + 
+                (0 + Condition | sex) + (0 + Condition | AgeSplit) + 
+                (0 + Condition | Previous),
               prior = c(prior(normal(0, 1), class = b)
                         ,prior(exponential(1), class = sd, group = Game_Type)
                         ,prior(lkj(2), class = cor, group = Game_Type)
@@ -288,7 +296,7 @@ d_winlose <- d %>%
 
 ```
 
-We can use also this to calculate per round win probabilities. Fist the aim game:
+We can use also this to calculate per round win probabilities. First the aim game:
 
 ```{r}
 #First the aim/hunting game
@@ -302,8 +310,6 @@ d_winlose %>%
    "Win Proportion" = "PreviousBinary"
   ) %>%
   arrange()
-
-
 ```
 
 Then the search game:
@@ -320,7 +326,6 @@ d_winlose %>%
    "Win Proportion" = "PreviousBinary"
   ) %>%
   arrange()
-
 ```
 
 Now let's run our models.
@@ -328,7 +333,8 @@ Now let's run our models.
 ```{r}
 CrGtrSrA.2 <- brm(data = d_winlose,
               family = bernoulli,
-              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + (0 + Condition | sex) + (0 + Condition | AgeSplit),
+              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + 
+                (0 + Condition | sex) + (0 + Condition | AgeSplit),
               prior = c(prior(normal(0, 1), class = b)
                         ,prior(exponential(1), class = sd, group = Game_Type)
                         ,prior(lkj(2), class = cor, group = Game_Type)
@@ -349,7 +355,9 @@ CrGtrSrA.2 <- add_criterion(CrGtrSrA.2, criterion = c("loo", "waic"))
 
 CrGtrSrArP.2 <- brm(data = d_winlose,
               family = bernoulli,
-              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + (0 + Condition | sex) + (0 + Condition | AgeSplit) + (0 + Condition | Previous),
+              Played1 ~ 0 + Condition + (0 + Condition | Game_Type) + 
+                (0 + Condition | sex) + (0 + Condition | AgeSplit) + 
+                (0 + Condition | Previous),
               prior = c(prior(normal(0, 1), class = b)
                         ,prior(exponential(1), class = sd, group = Game_Type)
                         ,prior(lkj(2), class = cor, group = Game_Type)
@@ -376,7 +384,6 @@ CrGtrSrArP.2 <- add_criterion(CrGtrSrArP.2, criterion = c("loo", "waic"))
 Now for another model selection
 
 ```{r}
-
 ms8 <- loo_compare(CrGtrSrA.2, CrGtrSrArP.2, criterion = "loo") %>%
   round(digits = 2) %>% 
   as.data.frame() %>% 
@@ -400,7 +407,6 @@ ms8 <- model_weights(CrGtrSrA.2, CrGtrSrArP.2, weights = "loo") %>%
   select(-rowname)
   
 ms8
-
 ```
 
 These model selection results make much more sense. Adding previous round win probabilities to this model doesn't actually greatly improve model fit - the full model excluding play probabilities is actually slightly preferred. Let's examine our fitted model predictions anyway, to see what's happening.
@@ -419,36 +425,50 @@ NCrGtrSrAFitMY1 <- fitted(CrGtrSrArP.2, newdata = nd, probs = c(.05,.95)) %>%
   bind_cols(nd) %>%
   filter(sex == "M" & AgeSplit == "Younger") %>%
   unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new, color = Previous)) + geom_point( position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))+
-  theme(legend.position = "none", axis.title = element_blank()) + scale_y_discrete() + scale_color_manual(values=c("DarkGrey", "Yellow4"))
+  ggplot(aes(x = Estimate, y = new, color = Previous)) + 
+  geom_point(position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  
+                position = position_dodge(.9))+
+  theme(legend.position = "none", axis.title = element_blank()) + 
+  scale_y_discrete() + scale_color_manual(values=c("DarkGrey", "Yellow4"))
 
 NCrGtrSrAFitFY1 <- fitted(CrGtrSrArP.2, newdata = nd, probs = c(.05,.95)) %>% 
   data.frame() %>% 
   bind_cols(nd) %>%
   filter(sex == "F" & AgeSplit == "Younger") %>%
   unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new, color = Previous)) + geom_point( position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))+
-  theme(axis.title = element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()) + scale_color_manual(values=c("DarkGrey", "Yellow4"))
+  ggplot(aes(x = Estimate, y = new, color = Previous)) + 
+  geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  
+                position = position_dodge(.9))+
+  theme(axis.title = element_blank(), axis.text.y=element_blank(), 
+        axis.ticks.y=element_blank()) + 
+  scale_color_manual(values=c("DarkGrey", "Yellow4"))
 
 NCrGtrSrAFitMO1 <- fitted(CrGtrSrArP.2, newdata = nd, probs = c(.05,.95)) %>% 
   data.frame() %>% 
   bind_cols(nd) %>%
   filter(sex == "M" & AgeSplit == "Older") %>%
   unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new, color = Previous)) + geom_point( position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))+
-  theme(legend.position = "none", axis.title = element_blank()) + scale_y_discrete() + scale_color_manual(values=c("DarkGrey", "Yellow4"))
+  ggplot(aes(x = Estimate, y = new, color = Previous)) + 
+  geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  
+                position = position_dodge(.9))+
+  theme(legend.position = "none", axis.title = element_blank()) + 
+  scale_y_discrete() + scale_color_manual(values=c("DarkGrey", "Yellow4"))
 
 NCrGtrSrAFitFO1 <- fitted(CrGtrSrArP.2, newdata = nd, probs = c(.05,.95)) %>% 
   data.frame() %>% 
   bind_cols(nd) %>%
   filter(sex == "F" & AgeSplit == "Older") %>%
   unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new, color = Previous)) + geom_point( position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))+
-  theme(axis.title = element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()) + scale_color_manual(values=c("DarkGrey", "Yellow4"))
+  ggplot(aes(x = Estimate, y = new, color = Previous)) + 
+  geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  
+                position = position_dodge(.9))+
+  theme(axis.title = element_blank(), axis.text.y=element_blank(), 
+        axis.ticks.y=element_blank()) + 
+  scale_color_manual(values=c("DarkGrey", "Yellow4"))
 
 NCrGtrSrAFitMY1 + NCrGtrSrAFitFY1 +
 NCrGtrSrAFitMO1 + NCrGtrSrAFitFO1 +
@@ -456,189 +476,6 @@ plot_layout(ncol = 2, nrow = 2)
 ```
 
 These don't have axis labels but the left column is women, and the top row is younger individuals (right = men, bottom = older). As we can see, in most cases winning or losing a previous round makes little difference. The only categories in which results seem to be trending are, in fact, those where bracelets are available. When bracelets are available, we see that losing a round appears to slightly increase the mean probability of playing again. This makes of sense - if bracelets are desired for their signalling value, there is good sense in playing until you get one.
-
-### Camp Size
-
-Let's also explore camp size. Games generated significant interest and, as they were necessarily conducted outside, it proved impossible to exclude onlookers. It's worth exploring whether camp size increase play probabilities.
-
-We'll write a few more models here. First we want to see if camp size improves on the model including only condition and game type.
-
-```{r}
-
-CrGT <- brm(data = d,
-              family = bernoulli,
-              Played1 ~ 0 + Condition + (0 + Condition | Game_Type),
-              prior = c(prior(normal(0, 1), class = b))  
-              ,prior(exponential(1), class = sd, group = Game_Type)
-              ,prior(lkj(2), class = cor, group = Game_Type),
-              seed = 42,
-              iter = 10000, warmup = 5000, chains = 2, cores = 2,
-              control = list(adapt_delta = .99),
-              file = "fits/CrGT",
-          )
-
-CrGT <- add_criterion(CrGT, criterion = c("loo", "waic")) 
-
-CCprGT <- brm(data = d,
-              family = bernoulli,
-              Played1 ~ 0 + Condition + camppop + (0 + Condition + camppop | Game_Type),
-              prior = c(prior(normal(0, 1), class = b))  
-              ,prior(exponential(1), class = sd, group = Game_Type)
-              ,prior(lkj(2), class = cor, group = Game_Type),
-              seed = 42,
-              iter = 10000, warmup = 5000, chains = 2, cores = 2,
-              control = list(adapt_delta = .99),
-              file = "fits/CCprGT",
-          )
-
-CCprGT <- add_criterion(CCprGT, criterion = c("loo", "waic")) 
-
-```
-
-Now lets visualise these findings.
-
-```{r}
-nd <-  d %>% 
-  distinct(Condition, Game_Type) %>%
-  mutate(camppop = min(d$camppop))
-
-CrGTFit1 <- fitted(CCprGT, newdata = nd, probs = c(.05,.95)) %>% 
-  data.frame() %>% 
-  bind_cols(nd) %>%
-  ggplot(aes(x = Estimate, y = Condition, color = Game_Type)) + geom_point(position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))#+
-#  theme(legend.position = "none", axis.title = element_blank()) + scale_y_discrete(labels= NewLabs)
-
-
-nd <-  d %>% 
-  distinct(Condition, Game_Type) %>%
-  mutate(camppop = mean(d$camppop))
-
-CrGTFit2 <- fitted(CCprGT, newdata = nd, probs = c(.05,.95)) %>% 
-  data.frame() %>% 
-  bind_cols(nd) %>%
-  ggplot(aes(x = Estimate, y = Condition, color = Game_Type)) + geom_point(position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))#+
-#  theme(legend.position = "none", axis.title = element_blank()) + scale_y_discrete(labels= NewLabs)
-
-
-nd <-  d %>% 
-  distinct(Condition, Game_Type) %>%
-  mutate(camppop = max(d$camppop))
-
-
-CrGTFit3 <- fitted(CCprGT, newdata = nd, probs = c(.05,.95)) %>% 
-  data.frame() %>% 
-  bind_cols(nd) %>%
-  ggplot(aes(x = Estimate, y = Condition, color = Game_Type)) + geom_point(position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))#+
-#  theme(legend.position = "none", axis.title = element_blank()) + scale_y_discrete(labels= NewLabs)
-
-
-
-CrGTFit1 +
-CrGTFit2 +
-CrGTFit3 +
-plot_layout(ncol = 1, nrow = 3)
-```
-
-Now let's compare
-
-```{r}
-
-
-ms9 <- loo_compare(CrGT, CCprGT, criterion = "loo") %>%
-  round(digits = 2) %>% 
-  as.data.frame() %>% 
-  select(elpd_diff,se_diff) %>% 
-  rownames_to_column() %>%
-  arrange(rowname)
-  
-ms9 <- model_weights(CrGT, CCprGT, weights = "loo") %>% 
-  round(digits = 2) %>%
-  as.data.frame() %>% 
-  rownames_to_column() %>%
-  arrange(rowname) %>%
-  column_to_rownames("rowname") %>%
-  cbind(ms9) %>%
-  rename(
-    Weights = ".",
-    "ELPD Difference" = elpd_diff,
-    "SE Difference" = "se_diff"
-  ) %>%
-  arrange(desc(`ELPD Difference`)) %>%
-  select(-rowname)
-  
-ms9
-
-```
-
-Of course, as camp sizes are fixed at the camp level, this variable is also providing camp-level information. As conditions (free/paid; Prize/No Prize) were set at the camp level, this potentially represents a confound and limits our ability to draw inferences from this finding. Let's try and account for this by comparing a model with camp ID and condition only, versus camp ID, condition and camp size. First let's run both models:
-
-```{r}
-
-CCidrGT <- brm(data = d,
-              family = bernoulli,
-              Played1 ~ 0 + Condition + campid + (0 + Condition + campid | Game_Type),
-              prior = c(prior(normal(0, 1), class = b))  
-              ,prior(exponential(1), class = sd, group = Game_Type)
-              ,prior(lkj(2), class = cor, group = Game_Type),
-              seed = 42,
-              iter = 10000, warmup = 5000, chains = 2, cores = 2,
-              control = list(adapt_delta = .99),
-              file = "fits/CCidrGT",
-          )
-
-CCidrGT <- add_criterion(CCidrGT, criterion = c("loo", "waic")) 
-
-
-CCidCprGT <- brm(data = d,
-              family = bernoulli,
-              Played1 ~ 0 + Condition + campid + camppop + (0 + Condition + campid + camppop | Game_Type),
-              prior = c(prior(normal(0, 1), class = b))  
-              ,prior(exponential(1), class = sd, group = Game_Type)
-              ,prior(lkj(2), class = cor, group = Game_Type),
-              seed = 42,
-              iter = 10000, warmup = 5000, chains = 2, cores = 2,
-              control = list(adapt_delta = .99),
-              file = "fits/CCidCprGT",
-          )
-
-CCidCprGT <- add_criterion(CCidCprGT, criterion = c("loo", "waic"))  
-```
-
-Now let's conduct a model selection
-
-```{r}
-
-
-ms10 <- loo_compare(CCidrGT, CCidCprGT, criterion = "loo") %>%
-  round(digits = 2) %>% 
-  as.data.frame() %>% 
-  select(elpd_diff,se_diff) %>% 
-  rownames_to_column() %>%
-  arrange(rowname)
-  
-ms10 <- model_weights(CCidrGT, CCidCprGT, weights = "loo") %>% 
-  round(digits = 2) %>%
-  as.data.frame() %>% 
-  rownames_to_column() %>%
-  arrange(rowname) %>%
-  column_to_rownames("rowname") %>%
-  cbind(ms10) %>%
-  rename(
-    Weights = ".",
-    "ELPD Difference" = elpd_diff,
-    "SE Difference" = "se_diff"
-  ) %>%
-  arrange(desc(`ELPD Difference`)) %>%
-  select(-rowname)
-  
-ms10
-
-```
-
-As we can see, the model without camp size is far preferred, and the camp size model provides little useful information. Now, let's explore the final potential methodological artifact, round number.
 
 ## Round Number
 
@@ -650,7 +487,8 @@ As round number should predominantly impact condition-level differences we'll st
 
 NCrGt <- brm(data = d,
               family = bernoulli,
-              Played1 ~ 0 + Condition + Round_Number + (0 + Condition + Round_Number | Game_Type),
+              Played1 ~ 0 + Condition + Round_Number + 
+               (0 + Condition + Round_Number | Game_Type),
               prior = c(prior(normal(0, 1), class = b)
                         ,prior(exponential(1), class = sd, group = Game_Type)
                         ,prior(lkj(2), class = cor, group = Game_Type)),
@@ -670,20 +508,20 @@ Lets see how this compares to the 'Condition \| game_type' only model.
 
 ```{r}
 
-ms11 <- loo_compare(NCrGt, CrGt, criterion = "loo") %>%
+ms9 <- loo_compare(NCrGt, CrGt, criterion = "loo") %>%
   round(digits = 2) %>% 
   as.data.frame() %>% 
   select(elpd_diff,se_diff) %>% 
   rownames_to_column() %>%
   arrange(rowname)
   
-ms11 <- model_weights(NCrGt, CrGt, weights = "loo") %>% 
+ms9 <- model_weights(NCrGt, CrGt, weights = "loo") %>% 
   round(digits = 2) %>%
   as.data.frame() %>% 
   rownames_to_column() %>%
   arrange(rowname) %>%
   column_to_rownames("rowname") %>%
-  cbind(ms11) %>%
+  cbind(ms9) %>%
   rename(
     Weights = ".",
     "ELPD Difference" = elpd_diff,
@@ -692,7 +530,7 @@ ms11 <- model_weights(NCrGt, CrGt, weights = "loo") %>%
   arrange(desc(`ELPD Difference`)) %>%
   select(-rowname)
   
-ms11
+ms9
 ```
 
 A substantial improvement. Adding round number makes a very large impact, and is worth investigating further. Let's add it to the 'full' model.
@@ -700,8 +538,10 @@ A substantial improvement. Adding round number makes a very large impact, and is
 ```{r}
 NCrGtrSrA <- brm(data = d,
               family = bernoulli,
-              Played1 ~ 0 + Round_Number + Condition + (0 + Round_Number + Condition | Game_Type) 
-              + (0 + Round_Number + Condition | sex) + (0 + Round_Number + Condition | AgeSplit),
+              Played1 ~ 0 + Round_Number + Condition + 
+                (0 + Round_Number + Condition | Game_Type) 
+              + (0 + Round_Number + Condition | sex) + 
+                (0 + Round_Number + Condition | AgeSplit),
               prior = c(prior(normal(0, 1), class = b)
                         ,prior(exponential(1), class = sd, group = Game_Type)
                         ,prior(lkj(2), class = cor, group = Game_Type)
@@ -724,20 +564,20 @@ NCrGtrSrA <- add_criterion(NCrGtrSrA, criterion = c("loo", "waic"))
 Now let's see if adding round number improves upon the full model.
 
 ```{r}
-ms12 <- loo_compare(CrGtrSrA, NCrGtrSrA, criterion = "loo") %>%
+ms10 <- loo_compare(CrGtrSrA, NCrGtrSrA, criterion = "loo") %>%
   round(digits = 2) %>% 
   as.data.frame() %>% 
   select(elpd_diff,se_diff) %>% 
   rownames_to_column() %>%
   arrange(rowname)
 
-ms12 <- model_weights(CrGtrSrA, NCrGtrSrA, weights = "loo") %>% 
+ms10 <- model_weights(CrGtrSrA, NCrGtrSrA, weights = "loo") %>% 
   round(digits = 2) %>%
   as.data.frame() %>% 
   rownames_to_column() %>%
   arrange(rowname) %>%
   column_to_rownames("rowname") %>%
-  cbind(ms12) %>%
+  cbind(ms10) %>%
   rename(
     Weights = ".",
     "ELPD Difference" = elpd_diff,
@@ -746,7 +586,7 @@ ms12 <- model_weights(CrGtrSrA, NCrGtrSrA, weights = "loo") %>%
   arrange(desc(`ELPD Difference`)) %>%
   select(-rowname)
 
-ms12
+ms10
 ```
 
 Substantially, as it transpires. Since round number is continuous, the complete model will be tricky to visualize. I'm going to use what McElreath calls a triptych, showing fitted predictions for round numbers 1, 3 (the mean value) and 5.
@@ -757,25 +597,32 @@ nd <-  d %>%
   distinct(AgeSplit, Condition, Game_Type, sex) %>%
   mutate(Round_Number = 1)
 
-NewLabs <- c("P0B1F","P0B1H", "P0B0F", "P0B0H", "P1B1F","P1B1H", "P1B0F", "P1B0H")
+NewLabs <- c("P0B1F","P0B1H", "P0B0F", "P0B0H", "P1B1F","P1B1H", 
+             "P1B0F", "P1B0H")
 
 NCrGtrSrAFitM1 <- fitted(NCrGtrSrA, newdata = nd, probs = c(.05,.95)) %>% 
   data.frame() %>% 
   bind_cols(nd) %>%
   filter(sex == "M") %>%
   unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + geom_point( position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))+
-  theme(legend.position = "none", axis.title = element_blank()) + scale_y_discrete(labels= NewLabs)
+  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + 
+  geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  
+                position = position_dodge(.9))+
+  theme(legend.position = "none", axis.title = element_blank()) + 
+  scale_y_discrete(labels= NewLabs)
 
 NCrGtrSrAFitF1 <- fitted(NCrGtrSrA, newdata = nd, probs = c(.05,.95)) %>% 
   data.frame() %>% 
   bind_cols(nd) %>%
   filter(sex == "F") %>%
   unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + geom_point( position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9))  + 
-  theme(axis.title = element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank(), legend.position = "none")
+  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + 
+  geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  
+                position = position_dodge(.9))  + 
+  theme(axis.title = element_blank(), axis.text.y=element_blank(), 
+        axis.ticks.y=element_blank(), legend.position = "none")
 
 nd <-  d %>% 
   distinct(AgeSplit, Condition, Game_Type, sex) %>%
@@ -786,9 +633,12 @@ NCrGtrSrAFitM3 <- fitted(NCrGtrSrA, newdata = nd, probs = c(.05,.95)) %>%
   bind_cols(nd) %>%
   filter(sex == "M") %>%
   unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + geom_point( position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9)) +
-  theme(legend.position = "none", axis.title = element_blank()) + scale_y_discrete(labels= NewLabs)
+  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + 
+  geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  
+                position = position_dodge(.9)) +
+  theme(legend.position = "none", axis.title = element_blank()) + 
+  scale_y_discrete(labels= NewLabs)
 
 
 NCrGtrSrAFitF3 <- fitted(NCrGtrSrA, newdata = nd, probs = c(.05,.95)) %>% 
@@ -796,9 +646,12 @@ NCrGtrSrAFitF3 <- fitted(NCrGtrSrA, newdata = nd, probs = c(.05,.95)) %>%
   bind_cols(nd) %>%
   filter(sex == "F") %>%
   unite(col = "new", c(Condition, Game_Type, sex), sep = "_") %>%
-  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + geom_point( position = position_dodge(.9)) + 
-  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  position = position_dodge(.9)) + 
-  theme(axis.title = element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
+  ggplot(aes(x = Estimate, y = new, color = AgeSplit)) + 
+  geom_point( position = position_dodge(.9)) + 
+  geom_errorbar(aes(xmin = Q5, xmax = Q95),width=0, lwd = 1,  
+                position = position_dodge(.9)) + 
+  theme(axis.title = element_blank(), axis.text.y=element_blank(), 
+        axis.ticks.y=element_blank())
 
 nd <-  d %>% 
   distinct(AgeSplit, Condition, Game_Type, sex) %>%

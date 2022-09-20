@@ -1,5 +1,5 @@
 % latex table generated in R 4.2.1 by xtable 1.8-4 package
-% Wed Aug 10 16:37:54 2022
+% Tue Sep 20 18:41:08 2022
 \begin{table}[ht]
 \centering
 \begingroup\small
@@ -7,15 +7,21 @@
   \hline
 Definition & ELPD Difference & SE Difference & Weights \\ 
   \hline
-0 + Condition + (0 + Condition | GameType) + (0 + Condition | Sex) + (0 + Condition | Age) & 0.00 & 0.00 & 0.84 \\ 
-  0 + Condition + (0 + Condition | GameType) + (0 + Condition | Sex) & -1.63 & 2.34 & 0.16 \\ 
-  0 + Condition + (0 + Condition | GameType) + (0 + Condition | Age) & -57.88 & 10.35 & 0.00 \\ 
-  0 + Condition + (0 + Condition | GameType) & -61.45 & 10.98 & 0.00 \\ 
+0 + Condition + (0 + Condition | GameType) + 
+                   (0 + Condition | Sex) + (0 + Condition | Age) & 0.00 & 0.00 & 0.82 \\ 
+  0 + Condition + (0 + Condition | GameType) + 
+                   (0 + Condition | Sex) & -1.54 & 2.35 & 0.18 \\ 
+  0 + Condition + (0 + Condition | GameType) + 
+                   (0 + Condition | Age) & -57.88 & 10.35 & 0.00 \\ 
+  0 + Condition + (0 + Condition | GameType) & -61.63 & 10.97 & 0.00 \\ 
   0 + GameType & -555.00 & 26.12 & 0.00 \\ 
   1 & -560.82 & 25.94 & 0.00 \\ 
    \hline
 \end{tabular}
 \endgroup
-\caption{Leave-one-out model selection results including expected log-predictive density differences, standard errors and Akaike weights. Left side model definitions provided in BRMs syntax} 
+\caption{Leave-one-out model selection results 
+         including expected log-predictive density differences, 
+         standard errors and Akaike weights. Left side model definitions 
+         provided in BRMs syntax} 
 \label{Tab:LooMS}
 \end{table}

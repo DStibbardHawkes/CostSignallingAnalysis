@@ -51,7 +51,7 @@ Now we can start exploring the full model.
 
 First, we'll wrangle our data and convert to the probability scale in order to reproduce our fitted outputs. It's a complex model and the corresponding code is also complex.
 
-```{r}
+```{r, warning = F}
 ps_CrGtrSrA <- posterior_samples(CrGtrSrA) %>%
   rename_with(
     ~ gsub("["  , "", .x, fixed = TRUE)
@@ -466,9 +466,6 @@ AgeContrasts  %>%
     mean_hdci(Estimate,.width = .9) %>%
     mutate_if(is_double, round, 2) %>%
     arrange(desc(Estimate))
-
- 
-   
 ```
 
 Finally, the final ridgeplots.
@@ -572,7 +569,6 @@ ggsave(
 That's slightly easier to follow. Let's do a couple more, first just hunting versus gathering game.
 
 ```{r}
-
 ContrastTableGame <- AllContrasts %>%
   filter(ContrastType == "Game Contrasts") %>%
   group_by(Contrasts, ContrastType) %>% 
@@ -591,9 +587,6 @@ ggsave(
   width = 21,
   height = 10,
   units = "cm")
-
-
-
 ```
 
 Last but not least we'll put the age and gender contrasts together. 

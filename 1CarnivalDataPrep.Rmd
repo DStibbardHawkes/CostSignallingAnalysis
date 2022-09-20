@@ -140,9 +140,9 @@ d %<>%
 
 ```
 
-Now to deal with the NAs. Our statistical question is 'how likely were people to play each game dependent on A) their gender, B) their age, C) whether they were awarded with a bracelet and C) whether they had to pay to play, D) the game type they played'. As a consequence of the study design, we have a different number total opportunities to play for different conditions. It is easiest to model this using a binomial (or Poisson) regression, treating each opportunity to play as a Bernoulli trial. For that reason, we'll code each NA as a zero (alternatively we could leave the NAs alone and instead create a variable for rowsums and specifying n trials - but this is mathematically analogous).
+Now to deal with the NAs. Our statistical question is 'how likely were people to play each game dependent on A) their gender, B) their age, C) whether they were awarded with a bracelet and C) whether they had to pay to play, D) the game type they played'. As a consequence of the study design, we have a different number total opportunities to play for different conditions. It is easiest to model this using a binomial (or Poisson) regression, treating each opportunity to play as a Bernoulli trial. For that reason, we'll code each NA as a zero (alternatively we could leave the NAs alone and instead create a variable for rowsums and specifying n trials - but this is analogous).
 
-```{r}
+```{r, warning= F}
 d %<>%
   mutate(across(c("h1played","h2played", "h3played", "h4played", "h5played",
                   "f1played","f2played","f3played","f4played","f5played"),
@@ -176,10 +176,9 @@ dpaid <- d %>%
   filter(h2condition != "NoPay_NoBracelet")
 
 c(mean(dpaid$paid2playhunt), mean(dpaid$paid2playforage), mean(dpaid$paid2play)) %>% round(2)
-  
 ```
 
-So, 26% of individuals paid to play at least once. 21% paid to play the hunting game, 8% paid to play the gathering game. Let's briefly disagregate by gender and do the same, first women:
+So, 26% of individuals paid to play at least once. 21% paid to play the hunting game, 8% paid to play the gathering game. Let's briefly disaggregate by gender and do the same, first women:
 
 ```{r}
 c(mean(dpaid$paid2playhunt[dpaid$sex == "F"]), mean(dpaid$paid2playforage[dpaid$sex == "F"]), mean(dpaid$paid2play[dpaid$sex == "F"])) %>% round(2)
